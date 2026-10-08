@@ -1,8 +1,3 @@
-// ===== Online services (optional) =====
-// Leave these empty and accounts + leaderboards are saved on this device only.
-// Fill them in with a free Supabase project (see README) to get global live leaderboards
-// and accounts that sign in from any device with their key.
 const ONLINE = {
-  SUPABASE_URL: '',      // e.g. 'https://abcdxyz.supabase.co'
-  SUPABASE_ANON_KEY: '', // the project's public "anon" key (safe to publish)
-};
+  SUPABASE_URL: 'https://mfqihieztxqhgxzvdrii.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mcWloaWV6dHhxaGd4enZkcmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0OTAyOTIsImV4cCI6MjEwNzA2NjI5Mn0.5tJq5_fhqcfqVeuNtBPtl1yPHBDs8IupOnaqIhtfITQ',
