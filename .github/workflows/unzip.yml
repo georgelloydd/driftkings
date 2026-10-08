@@ -8,10 +8,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          ref: main
+
       - name: Extract zip file
         run: |
-          unzip drift-kings.zip -d target-folder/
+          unzip drift-kings.zip -d main/
           rm drift-kings.zip
           
       - name: Commit and Push Changes
@@ -19,5 +21,5 @@ jobs:
           git config --local user.email "github-actions@users.noreply.github.com"
           git config --local user.name "github-actions"
           git add .
-          git commit -m "Automated unzip" || echo "No changes to commit"
-          git push
+          git commit -m "Automated unzip into main directory" || echo "No changes to commit"
+          git push origin main
