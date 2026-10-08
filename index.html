@@ -6,6 +6,7 @@
 <title>Mini Drifters</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
 <canvas id="cv"></canvas>
@@ -47,6 +48,10 @@
       <p id="ttHint" class="hint">Endless laps until you quit. <b>R</b> restarts the lap · <b>F</b> back to last checkpoint · <b>ESC</b> ends the session.</p>
       <div class="row big"><button id="bSolo" class="btn primary">▶ Play solo</button><button id="bHost" class="btn dark">Host online race</button></div>
       <div class="row big" id="joinRow"><input id="codeIn" maxlength="5" placeholder="ROOM CODE"><button id="bJoin" class="btn dark">Join friend</button></div>
+      <div id="srvBox">
+        <div class="row" style="justify-content:space-between;align-items:flex-end"><label>Servers <span id="srvMode" class="dim"></span></label><label class="chk"><input type="checkbox" id="pubChk" checked> List my room publicly</label></div>
+        <div id="servers" class="servers"></div>
+      </div>
       <p id="menuMsg" class="msg"></p>
       <p id="records" class="rec"></p>
       <p class="keys">W/↑ throttle · S/↓ brake · A D/← → steer · SPACE handbrake · R reset · F checkpoint · C camera · M mute · T chat · ESC menu</p>
@@ -71,6 +76,12 @@
     </section>
     <section class="tab hidden" id="tab-acct">
       <h1>ACCOUNT</h1><div class="bar"></div>
+      <div class="card">
+        <label>Driver name</label>
+        <div class="row"><input id="acctName" maxlength="14" placeholder="Your name"><button class="btn primary sm" id="bName">Save name</button></div>
+        <p class="hint">Shown in races, rooms and on the leaderboards. Changing it updates your existing leaderboard times too.</p>
+        <p id="nameMsg" class="msg"></p>
+      </div>
       <div class="card">
         <label>Your account key</label>
         <div class="row"><input id="keyOut" readonly><button class="btn dark sm" id="bReveal">Show</button><button class="btn dark sm" id="bCopyKey">Copy</button></div>

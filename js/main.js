@@ -109,7 +109,7 @@ function tick(ts) {
     if (Math.hypot(px - c.x, py - c.y) > 400) { c.x = px; c.y = py; } else { c.x += (px - c.x) * k; c.y += (py - c.y) * k; } c.a += angDiff(r.tgt.a, c.a) * k; c.vx = r.tgt.vx; c.vy = r.tgt.vy; c.speed = Math.hypot(c.vx, c.vy); c.slip = Math.abs(angDiff(Math.atan2(c.vy, c.vx), c.a));
     const dx = me.x - c.x, dy = me.y - c.y, dd = Math.hypot(dx, dy); if (dd < 44 && dd > 0.01 && racing) { const nx = dx / dd, ny = dy / dd; me.x += nx * (44 - dd); me.y += ny * (44 - dd); const rv = (me.vx - c.vx) * nx + (me.vy - c.vy) * ny; if (rv < 0) { me.vx -= rv * 1.3 * nx; me.vy -= rv * 1.3 * ny; } if (me.cur > 200) { pop('CONTACT! DRIFT LOST', '#ff6060'); me.cur = 0; me.combo = 1; } } }
   // network
-  if (G.mp && now - G.sendT > 66) { G.sendT = now; const s = pack(me); if (NET.host) { const list = [['host', ...s]]; for (const [id, r] of G.rem) if (r.raw) list.push([id, ...r.raw]); netSend({ t: 'all', list }); if (G.firstFin && !G.final && now - G.firstFin > 30000) hostRes(true); } else netSend({ t: 'st', s }); }
+  if (G.mp && now - G.sendT > NET.rate) { G.sendT = now; const s = pack(me); if (NET.host) { const list = [['host', ...s]]; for (const [id, r] of G.rem) if (r.raw) list.push([id, ...r.raw]); netSend({ t: 'all', list }); if (G.firstFin && !G.final && now - G.firstFin > 30000) hostRes(true); } else netSend({ t: 'st', s }); }
   effects(dt); render(dt, now); hud(now); sndUpdate(me, true);
 }
 function effects(dt) {

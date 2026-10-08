@@ -12,7 +12,7 @@ function refreshMenu() {
   document.querySelectorAll('.ty').forEach(s => { s.classList.toggle('on', s.dataset.b === CFG.body); drawCarPreview(s.querySelector('canvas'), s.dataset.b, CFG.color, CFG.livery, -0.35); });
   document.querySelectorAll('[data-lv]').forEach(s => s.classList.toggle('on', s.dataset.lv === CFG.livery));
   const tt = CFG.mode === 'tt';
-  $('lapRow').classList.toggle('hidden', tt); $('ttHint').classList.toggle('hidden', !tt); $('joinRow').classList.toggle('hidden', tt); $('bHost').classList.toggle('hidden', tt);
+  $('lapRow').classList.toggle('hidden', tt); $('ttHint').classList.toggle('hidden', !tt); $('joinRow').classList.toggle('hidden', tt); $('bHost').classList.toggle('hidden', tt); $('srvBox').classList.toggle('hidden', tt);
   $('bSolo').textContent = tt ? '▶ Start time trial' : '▶ Play solo';
   const r = rec(CFG.track); $('records').textContent = `Your records on ${TRACKS[CFG.track].name}: best lap ${fmt(ACCT.bestLap(CFG.track) || r.lap)} • best drift score ${(r.score || 0).toLocaleString()}`;
   const t = carType(CFG.body); $('gDesc').textContent = t.name.toUpperCase() + ' · ' + t.desc;
@@ -35,11 +35,18 @@ async function loadLB() {
   $('lbTable').innerHTML = '<tr><th>POS</th><th>DRIVER</th><th>CAR</th><th>BEST LAP</th><th>GAP</th><th>SET</th></tr>' + (res.rows.length ? res.rows.map((x, i) => `<tr class="${x.pid === ACCT.pub ? 'me' : ''}"><td class="pos">${i + 1}</td><td><i style="background:${esc(x.color || '#888')}"></i>${esc(x.name)}</td><td>${esc(carType(x.body).name)}</td><td>${fmt(x.lap)}</td><td>${i ? '+' + ((x.lap - best) / 1000).toFixed(2) : '—'}</td><td>${x.at ? new Date(x.at).toLocaleDateString() : ''}</td></tr>`).join('') : '<tr><td colspan="6" style="color:#8b8b93;padding:22px">No laps yet. Set one in Time trial.</td></tr>');
 }
 function refreshAcct() {
-  if (!ACCT.key) return; $('keyOut').value = KEYSHOWN ? ACCT.key : ACCT.key.slice(0, 3) + '••••-••••-••••'; $('bReveal').textContent = KEYSHOWN ? 'Hide' : 'Show';
+  if (!ACCT.key) return; if (document.activeElement !== $('acctName')) $('acctName').value = CFG.name; $('keyOut').value = KEYSHOWN ? ACCT.key : ACCT.key.slice(0, 3) + '••••-••••-••••'; $('bReveal').textContent = KEYSHOWN ? 'Hide' : 'Show';
   $('keyHint').innerHTML = CLOUD ? 'This key is your login. Enter it on any device to get your profile back. Keep it secret.' : 'This key is your login on this device. To move to another device, copy your <b>backup code</b> and paste it there. Keep both secret.';
   $('onStatus').innerHTML = CLOUD ? (ONLINE_ERR ? '<b style="color:#ff6b6b">Error</b> · ' + esc(ONLINE_ERR) : 'Connected to ' + esc(ONLINE.SUPABASE_URL.replace(/^https?:\/\//, ''))) : 'Off · saving on this device only (no Supabase details in js/config.js).';
   const s = ACCT.stats, tb = TRACKS.map((t, i) => s.best[i] && s.best[i].lap ? `<div><small>${esc(t.name)}</small><b>${fmt(s.best[i].lap)}</b></div>` : '').join('');
   $('stats').innerHTML = `<div><small>SESSIONS</small><b>${s.sessions}</b></div><div><small>RACES</small><b>${s.races}</b></div><div><small>LAPS</small><b>${s.laps}</b></div><div><small>DRIFT POINTS</small><b>${Math.round(s.drift).toLocaleString()}</b></div><div><small>DISTANCE</small><b>${s.dist.toFixed(1)} km</b></div>` + tb;
+}
+function renderServers(list) {
+  const box = $('servers');
+  if (list === null) { $('srvMode').textContent = '· peer-to-peer'; $('pubChk').parentElement.classList.add('hidden'); box.innerHTML = '<p class="hint">Add your Supabase details in deploy.html to get online servers (friends can join from any network) and a public server list. Without it, rooms are peer-to-peer and work best on the same wifi.</p>'; return; }
+  $('srvMode').textContent = '· online · ' + list.length + ' open';
+  box.innerHTML = list.length ? list.map(v => `<div class="srv"><b>${esc(v.host)}</b><span>${esc((TRACKS[v.track] || {}).name || '')} · ${esc(String(v.mode || '').toUpperCase())}${v.laps ? ' · ' + v.laps + ' laps' : ''}</span><span>${v.players}/8</span>${v.inRace ? '<em>RACING</em>' : `<button class="btn dark sm" data-code="${esc(v.code)}">Join</button>`}</div>`).join('') : '<p class="hint">No public rooms right now. Host one and it will show up here for everyone.</p>';
+  box.querySelectorAll('[data-code]').forEach(b => b.onclick = () => { if (G.state !== 'menu') return; $('codeIn').value = b.dataset.code; $('bJoin').click(); });
 }
 function buildMenu() {
   document.querySelectorAll('.nv').forEach(b => b.onclick = () => setTab(b.dataset.tab)); $('chip').onclick = () => setTab('acct');
@@ -54,6 +61,17 @@ function buildMenu() {
   document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { CFG.laps = +b.dataset.l; saveCfg(); refreshMenu(); });
   $('nameIn').oninput = () => { CFG.name = $('nameIn').value.trim().slice(0, 14) || 'Driver'; saveCfg(); $('chip').querySelector('b').textContent = CFG.name; };
   $('bTest').onclick = async () => { $('onStatus').textContent = 'Testing…'; const r = await testOnline(); $('onStatus').innerHTML = `<b style="color:${r.ok ? '#7dff9a' : '#ff6b6b'}">${r.ok ? 'Working' : 'Not working'}</b> · ${esc(r.msg)}`; };
+  $('bName').onclick = async () => {
+    const v = $('acctName').value.trim().replace(/\s+/g, ' ');
+    if (v.length < 2) return msg('nameMsg', 'Name needs at least 2 characters.');
+    if (v === CFG.name) return msg('nameMsg', 'That is already your name.');
+    CFG.name = v; saveCfg(); refreshMenu(); msg('nameMsg', 'Saving…');
+    if (NET.on) { if (NET.host) { NET.players.get('host').name = v; netLobby(); } else netSend({ t: 'info', name: v }); }
+    const r = await ACCT.rename(v); msg('nameMsg', r);
+  };
+  $('acctName').onkeydown = e => { if (e.key === 'Enter') $('bName').click(); e.stopPropagation(); };
+  $('pubChk').checked = NET.public; $('pubChk').onchange = () => { NET.public = $('pubChk').checked; rtListServer(); };
+  serversWatch(renderServers);
   $('bReveal').onclick = () => { KEYSHOWN = !KEYSHOWN; refreshAcct(); };
   const copy = (t, ok) => { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => msg('acctMsg', ok), () => { prompt('Copy this:', t); }); };
   $('bCopyKey').onclick = () => copy(ACCT.key, 'Key copied. Keep it somewhere safe.');
@@ -80,7 +98,7 @@ function buildMenu() {
 function showLobby(d) {
   if (d.players.length) G.plist = d.players; G.state = 'lobby';
   for (const s of ['hud', 'speedo', 'mini', 'board', 'driftBox', 'menu']) $(s).classList.add('hidden'); $('lobby').classList.remove('hidden'); banner('');
-  $('roomCode').textContent = NET.code;
+  $('roomCode').textContent = NET.code; $('lobbyHint').innerHTML = NET.rt ? (NET.public ? 'Your room is on the public <b>Servers</b> list. Or send this code to friends: it works from any network.' : 'Private room. Send this code to friends: it works from any network.') : 'Send this code to your friends. They open the game and press <b>Join friend</b>.';
   $('plist').innerHTML = G.plist.map(p => `<li><i style="background:${p.color}"></i>${esc(p.name)} <span class="dim">· ${esc(carType(p.body).name)}</span>${p.id === 'host' ? ' 👑' : ''}${p.id === NET.myId ? ' (you)' : ''}</li>`).join('');
   const c = d.cfg && d.cfg.track !== undefined ? d.cfg : emitCfg();
   if (NET.host) {

@@ -35,6 +35,16 @@ create policy "update profile" on profiles for update using (true);
 grant usage on schema public to anon;
 grant select, insert on laps to anon;
 grant select, insert, update on profiles to anon;
+
+-- name changes: only the owner of an account key can rename their leaderboard times
+create extension if not exists pgcrypto with schema extensions;
+create or replace function public.rename_player(p_key text, p_name text) returns void
+language sql security definer set search_path = public, extensions as $$
+  update public.laps set name = left(btrim(p_name), 14)
+  where pid = left(encode(extensions.digest('pub:' || p_key, 'sha256'), 'hex'), 24)
+    and length(btrim(p_name)) between 2 and 14;
+$$;
+grant execute on function public.rename_player(text, text) to anon;
 ```
 
 The profile id is a hash of your key, so nobody can find your profile without your key. Lap times are sent by the browser, so treat the board as friendly rather than cheat-proof.
@@ -44,3 +54,9 @@ The profile id is a hash of your key, so nobody can find your profile without yo
 
 ## Deploying
 Open `deploy.html`, paste a GitHub token and press Deploy. Or push these files to the `main` branch and turn on Pages (Settings → Pages → Deploy from branch → main / root).
+
+## Online servers
+
+With Supabase configured, multiplayer rooms run through **Supabase Realtime** (broadcast + presence), so friends can join from any network, and open rooms appear in the **Servers** list on the Play tab. No extra tables are needed. In Supabase → Realtime → Settings, keep "Allow public access" on (channels are public). Without Supabase the game falls back to PeerJS peer-to-peer.
+
+Free-plan Realtime limits (about 200 concurrent connections, 100 messages/second per project) are enough for a few rooms of friends; cars send 10 updates a second online.

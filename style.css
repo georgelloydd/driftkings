@@ -95,3 +95,13 @@ input:focus{border-color:var(--red)}
 #plist i{width:18px;height:18px;border-radius:50%;display:inline-block}
 #lobbyCfg{font-size:15px}
 @media (max-width:820px){#menu{flex-direction:column}#nav{width:auto;min-height:0;flex-direction:row;flex-wrap:wrap;padding:12px;align-items:center}.logo{padding:0 14px 0 6px;font-size:24px}.logo small{font-size:13px}.nv{padding:8px 12px;font-size:15px;border-left:none;border-bottom:3px solid transparent}.nv.on{border-bottom-color:var(--red)}.chip{display:none}#tabs{padding:18px}.garage{grid-template-columns:1fr}h1{font-size:34px}}
+
+/* server browser */
+#srvBox{margin-top:14px}
+.servers{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow:auto}
+.srv{display:grid;grid-template-columns:1.3fr 1.6fr .5fr auto;gap:10px;align-items:center;background:#111;border:1px solid #2a2a2a;border-left:3px solid #e10600;padding:8px 10px}
+.srv b{font-style:italic;text-transform:uppercase}
+.srv span{color:#aaa;font-size:13px}
+.srv em{color:#e10600;font-weight:800;font-style:italic;font-size:12px;letter-spacing:.08em}
+.srv .btn{padding:6px 14px}
+.dim{color:#777;font-weight:600;letter-spacing:0;text-transform:none}
