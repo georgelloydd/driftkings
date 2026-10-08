@@ -13,13 +13,13 @@ jobs:
 
       - name: Extract zip file
         run: |
-          unzip drift-kings.zip -d main/
+          unzip drift-kings.zip -d .
           rm drift-kings.zip
           
       - name: Commit and Push Changes
         run: |
-          git config --local user.email "github-actions@users.noreply.github.com"
+          git config --local user.email "github-actions@://github.com"
           git config --local user.name "github-actions"
           git add .
-          git commit -m "Automated unzip into main directory" || echo "No changes to commit"
+          git commit -m "Automated unzip to root directory" || echo "No changes to commit"
           git push origin main
