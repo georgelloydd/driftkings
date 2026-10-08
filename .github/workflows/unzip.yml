@@ -11,8 +11,8 @@ jobs:
       
       - name: Extract zip file
         run: |
-          unzip your-file.zip -d target-folder/
-          rm your-file.zip
+          unzip drift-kings.zip -d target-folder/
+          rm drift-kings.zip
           
       - name: Commit and Push Changes
         run: |
