@@ -37,6 +37,7 @@ async function loadLB() {
 function refreshAcct() {
   if (!ACCT.key) return; $('keyOut').value = KEYSHOWN ? ACCT.key : ACCT.key.slice(0, 3) + '••••-••••-••••'; $('bReveal').textContent = KEYSHOWN ? 'Hide' : 'Show';
   $('keyHint').innerHTML = CLOUD ? 'This key is your login. Enter it on any device to get your profile back. Keep it secret.' : 'This key is your login on this device. To move to another device, copy your <b>backup code</b> and paste it there. Keep both secret.';
+  $('onStatus').innerHTML = CLOUD ? (ONLINE_ERR ? '<b style="color:#ff6b6b">Error</b> · ' + esc(ONLINE_ERR) : 'Connected to ' + esc(ONLINE.SUPABASE_URL.replace(/^https?:\/\//, ''))) : 'Off · saving on this device only (no Supabase details in js/config.js).';
   const s = ACCT.stats, tb = TRACKS.map((t, i) => s.best[i] && s.best[i].lap ? `<div><small>${esc(t.name)}</small><b>${fmt(s.best[i].lap)}</b></div>` : '').join('');
   $('stats').innerHTML = `<div><small>SESSIONS</small><b>${s.sessions}</b></div><div><small>RACES</small><b>${s.races}</b></div><div><small>LAPS</small><b>${s.laps}</b></div><div><small>DRIFT POINTS</small><b>${Math.round(s.drift).toLocaleString()}</b></div><div><small>DISTANCE</small><b>${s.dist.toFixed(1)} km</b></div>` + tb;
 }
@@ -52,6 +53,7 @@ function buildMenu() {
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { CFG.mode = b.dataset.mode; saveCfg(); refreshMenu(); });
   document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { CFG.laps = +b.dataset.l; saveCfg(); refreshMenu(); });
   $('nameIn').oninput = () => { CFG.name = $('nameIn').value.trim().slice(0, 14) || 'Driver'; saveCfg(); $('chip').querySelector('b').textContent = CFG.name; };
+  $('bTest').onclick = async () => { $('onStatus').textContent = 'Testing…'; const r = await testOnline(); $('onStatus').innerHTML = `<b style="color:${r.ok ? '#7dff9a' : '#ff6b6b'}">${r.ok ? 'Working' : 'Not working'}</b> · ${esc(r.msg)}`; };
   $('bReveal').onclick = () => { KEYSHOWN = !KEYSHOWN; refreshAcct(); };
   const copy = (t, ok) => { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => msg('acctMsg', ok), () => { prompt('Copy this:', t); }); };
   $('bCopyKey').onclick = () => copy(ACCT.key, 'Key copied. Keep it somewhere safe.');

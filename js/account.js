@@ -24,13 +24,13 @@ const ACCT = {
     if (CLOUD && fetchCloud !== false) { try { const r = await sb('GET', 'profiles?id=eq.' + this.priv + '&select=data'); if (r && r[0]) data = r[0].data; } catch (e) { } }
     if (data) { this.stats = Object.assign(blankStats(), data.stats || {}); if (data.cfg) { Object.assign(CFG, data.cfg); } }
     else this.stats = blankStats();
-    this.save(true);
+    this.save(true); if (CLOUD) { this.save(); syncBests(false); }
     return !!data;
   },
   data() { return { cfg: { name: CFG.name, color: CFG.color, body: CFG.body, livery: CFG.livery }, stats: this.stats }; },
   save(localOnly) {
     if (!this.key) return; localStorage.setItem('md_acct_' + this.key, JSON.stringify(this.data()));
-    if (CLOUD && !localOnly) { clearTimeout(this._t); this._t = setTimeout(() => sb('POST', 'profiles', { id: this.priv, data: this.data(), updated_at: new Date().toISOString() }, 'resolution=merge-duplicates').catch(() => { }), 800); }
+    if (CLOUD && !localOnly) { clearTimeout(this._t); this._t = setTimeout(() => sb('POST', 'profiles', { id: this.priv, data: this.data(), updated_at: new Date().toISOString() }, 'resolution=merge-duplicates,return=minimal').catch(() => { }), 800); }
   },
   backup() { return 'MDB1.' + btoa(unescape(encodeURIComponent(JSON.stringify({ k: this.key, d: this.data() })))); },
   async restore(text) {
@@ -47,11 +47,31 @@ const ACCT = {
   lap(tr, ms, score) { const b = this.stats.best[tr] = this.stats.best[tr] || {}; let pb = false; if (!b.lap || ms < b.lap) { b.lap = ms; pb = true; LB.submit(tr, ms, score); } this.save(); return pb; },
 };
 
+let ONLINE_ERR = '';
 async function sb(method, path, body, prefer) {
-  const r = await fetch(ONLINE.SUPABASE_URL.replace(/\/$/, '') + '/rest/v1/' + path, { method, headers: { apikey: ONLINE.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + ONLINE.SUPABASE_ANON_KEY, 'Content-Type': 'application/json', Prefer: prefer || 'return=minimal' }, body: body ? JSON.stringify(body) : undefined });
-  if (!r.ok) throw new Error('Leaderboard server ' + r.status); const t = await r.text(); return t ? JSON.parse(t) : null;
+  const key = ONLINE.SUPABASE_ANON_KEY.trim(), h = { apikey: key, 'Content-Type': 'application/json', Prefer: prefer || 'return=minimal' };
+  if (key.startsWith('eyJ')) h.Authorization = 'Bearer ' + key; // legacy anon JWT only; sb_publishable_ keys go in apikey alone
+  let r; try { r = await fetch(ONLINE.SUPABASE_URL.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/, '') + '/rest/v1/' + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }); }
+  catch (e) { ONLINE_ERR = 'Could not reach Supabase. Check SUPABASE_URL (should look like https://xxxx.supabase.co).'; throw new Error(ONLINE_ERR); }
+  const t = await r.text();
+  if (!r.ok) { let m = t; try { const j = JSON.parse(t); m = [j.message, j.hint, j.details].filter(Boolean).join(' · '); } catch (e) { } ONLINE_ERR = `${method} ${path.split('?')[0]} failed (${r.status}): ${m}`; console.warn('[Supabase]', ONLINE_ERR); throw new Error(ONLINE_ERR); }
+  ONLINE_ERR = ''; return t ? JSON.parse(t) : null;
 }
-
+async function testOnline() {
+  if (!CLOUD) return { ok: false, msg: 'Online is off: js/config.js has no SUPABASE_URL / SUPABASE_ANON_KEY on this deployed site.' };
+  const steps = [];
+  try { await sb('GET', 'laps?select=id&limit=1'); steps.push('✓ read laps'); } catch (e) { return { ok: false, msg: e.message }; }
+  try { await sb('POST', 'profiles', { id: ACCT.priv, data: ACCT.data(), updated_at: new Date().toISOString() }, 'resolution=merge-duplicates,return=minimal'); steps.push('✓ save profile'); } catch (e) { return { ok: false, msg: steps.join(' ') + ' ✗ ' + e.message }; }
+  const n = await syncBests(true); steps.push(`✓ uploaded ${n} best lap${n === 1 ? '' : 's'}`);
+  return { ok: true, msg: steps.join(' · ') };
+}
+// push every local best lap up once, so laps set before Supabase was configured still appear
+async function syncBests(force) {
+  if (!CLOUD) return 0; let n = 0; const done = JSON.parse(localStorage.getItem('md_synced_' + ACCT.key) || '{}');
+  for (const tr in ACCT.stats.best) { const lap = ACCT.stats.best[tr].lap; if (!lap || (!force && done[tr] === lap)) continue;
+    try { await sb('POST', 'laps', { track: +tr, pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap_ms: Math.round(lap), score: 0 }); done[tr] = lap; n++; } catch (e) { break; } }
+  localStorage.setItem('md_synced_' + ACCT.key, JSON.stringify(done)); return n;
+}
 const LB = {
   localGet(tr) { return JSON.parse(localStorage.getItem('md_lb_' + tr) || '[]'); },
   submit(tr, ms, score) {

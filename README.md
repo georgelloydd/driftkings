@@ -18,7 +18,7 @@ W/↑ throttle · S/↓ brake · A D/← → steer · SPACE handbrake · R reset
 Each player gets a secret key (`MD-XXXX-XXXX-XXXX`). The key is the login.
 
 - **Default (no setup):** your profile, stats and the leaderboard are saved in this browser. To move to another device, copy your **backup code** from Account and paste it into Sign in there.
-- **Global live leaderboards (optional):** create a free Supabase project, run the SQL below in its SQL editor, then put the project URL and anon key in `js/config.js`. After that, keys work on any device and the leaderboard refreshes every 5 seconds.
+- **Global live leaderboards (optional):** create a free Supabase project, run the SQL below in its SQL editor, then enter the project URL and publishable (anon) key in `deploy.html` when you deploy (it writes `js/config.js` for you). Use Account → Test connection in the game to check it works. After that, keys work on any device and the leaderboard refreshes every 5 seconds.
 
 ```sql
 create table profiles (id text primary key, data jsonb not null, updated_at timestamptz default now());
@@ -32,6 +32,9 @@ create policy "add laps" on laps for insert with check (true);
 create policy "read profile" on profiles for select using (true);
 create policy "save profile" on profiles for insert with check (true);
 create policy "update profile" on profiles for update using (true);
+grant usage on schema public to anon;
+grant select, insert on laps to anon;
+grant select, insert, update on profiles to anon;
 ```
 
 The profile id is a hash of your key, so nobody can find your profile without your key. Lap times are sent by the browser, so treat the board as friendly rather than cheat-proof.
