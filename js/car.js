@@ -31,6 +31,16 @@ function stepCar(c, inp, dt, tr) {
   c.x += c.vx * dt; c.y += c.vy * dt;
   if (c.x < 30 || c.x > WORLD_W - 30) { c.x = Math.max(30, Math.min(WORLD_W - 30, c.x)); c.vx *= -0.3; }
   if (c.y < 30 || c.y > WORLD_H - 30) { c.y = Math.max(30, Math.min(WORLD_H - 30, c.y)); c.vy *= -0.3; }
+  { // far barrier wall
+    const limit = tr.w / 2 + barrierGap(tr) - 8, nb = nearest(tr, c.x, c.y, c.hint);
+    if (nb.d > limit) {
+      const p = tr.pts[nb.i]; let ux = c.x - p[0], uy = c.y - p[1]; const ul = Math.hypot(ux, uy) || 1; ux /= ul; uy /= ul;
+      c.x -= ux * (nb.d - limit); c.y -= uy * (nb.d - limit);
+      const vn = c.vx * ux + c.vy * uy;
+      if (vn > 0) { c.vx -= ux * vn * 1.5; c.vy -= uy * vn * 1.5; c.vx *= 0.85; c.vy *= 0.85; vF = c.vx * fx + c.vy * fy; }
+      if (c.cur > 100 && typeof G !== 'undefined' && c === G.me) { pop('WALL HIT! DRIFT LOST', '#ff6060'); c.cur = 0; c.combo = 1; c.comboT = 0; }
+    }
+  }
   c.brake = inp.down && vF > 20; c.hb = !!inp.hb; c.speed = speed; c.vF = vF;
   return nr;
 }

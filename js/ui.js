@@ -1,6 +1,6 @@
 // ===== Menus, lobby, input, network wiring =====
 emitCfg = () => ({ track: CFG.track, laps: CFG.laps, mode: CFG.mode });
-const MODES = { race: 'Race (fastest)', drift: 'Drift battle' };
+const MODES = { race: 'Race (fastest)', drift: 'Drift battle', tt: 'Time trial' };
 function msg(id, t) { $(id).textContent = t || ''; }
 function refreshMenu() {
   $('nameIn').value = CFG.name;
@@ -20,6 +20,7 @@ function buildMenu() {
   $('nameIn').oninput = () => { CFG.name = $('nameIn').value.trim().slice(0, 14) || 'Driver'; saveCfg(); };
   $('bSolo').onclick = () => { msg('menuMsg'); G.plist = []; startSession(emitCfg(), null, false); };
   $('bHost').onclick = () => {
+    if (CFG.mode === 'tt') { CFG.mode = 'race'; saveCfg(); refreshMenu(); } // time trial is solo
     if (!netAvailable()) return msg('menuMsg', 'Online play needs internet: the multiplayer library could not load.');
     msg('menuMsg', 'Creating room…'); $('bHost').disabled = true;
     netHost(CFG, e => { $('bHost').disabled = false; if (e) { netLeave(); return msg('menuMsg', netErrText(e)); } msg('menuMsg'); G.mp = true; G.state = 'lobby'; netLobby(); });
@@ -78,7 +79,8 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase(); KEYS[k] = true;
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
   if (G.state === 'race' && G.me) {
-    if (k === 'r' && !e.repeat) resetCar(G.me);
+    if (k === 'r' && !e.repeat) resetToStart(G.me);
+    if (k === 'f' && !e.repeat) resetToCheckpoint(G.me);
     if (k === 't' && G.mp) { e.preventDefault(); $('chatIn').classList.remove('hidden'); $('chatIn').focus(); }
   }
   if (k === 'c' && !e.repeat) { G.rot = !G.rot; pop(G.rot ? 'Chase camera' : 'Top-down camera'); }

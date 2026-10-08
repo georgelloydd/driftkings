@@ -17,12 +17,14 @@ function setRec(tr, r) { localStorage.setItem('dk_rec_' + tr, JSON.stringify(r))
 function myId() { return G.mp ? NET.myId : 'me'; }
 
 function startSession(cfg, grid, mp) {
+  if (cfg.mode === 'tt') cfg = Object.assign({}, cfg, { laps: 0 });
   G.cfg = cfg; G.mp = mp; G.tr = buildTrack(cfg.track); G.rem.clear(); G.res.clear(); G.resList = null; G.final = false; G.firstFin = 0; G.smoke = [];
   grid = grid || [myId()];
   grid.forEach((id, slot) => {
     if (id === myId()) G.me = newCar(slot, G.tr, id, CFG.name, CFG.color);
     else { const p = G.plist.find(q => q.id === id) || { name: 'Driver', color: '#888' }; G.rem.set(id, { car: newCar(slot, G.tr, id, p.name, p.color), tgt: null, raw: null }); }
   });
+  if (cfg.mode === 'tt') ttPlace(G.me); else G.me.spawnI = G.me.prog;
   G.cam.x = G.me.x; G.cam.y = G.me.y; G.cam.a = -G.me.a - Math.PI / 2;
   for (const s of ['menu', 'lobby', 'board']) $(s).classList.add('hidden');
   for (const s of ['hud', 'speedo', 'mini']) $(s).classList.remove('hidden');
@@ -32,10 +34,10 @@ function startSession(cfg, grid, mp) {
 }
 function progress(c, i, now) {
   const n = G.tr.n, f = i / n, lf = c.prog / n;
-  if (f > 0.2 && f < 0.3) c.cps |= 1; if (f > 0.45 && f < 0.55) c.cps |= 2; if (f > 0.7 && f < 0.8) c.cps |= 4;
+  if (f > 0.2 && f < 0.3 && !(c.cps & 1)) { c.cps |= 1; c.cpI = i; } if (f > 0.45 && f < 0.55 && !(c.cps & 2)) { c.cps |= 2; c.cpI = i; } if (f > 0.7 && f < 0.8 && !(c.cps & 4)) { c.cps |= 4; c.cpI = i; }
   if (lf > 0.85 && f < 0.15) {
-    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.cps = 0; }
-    else if (c.cps === 7) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.cps = 0; onLap(c, lt, now); }
+    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.cps = 0; c.cpI = i; }
+    else if (c.cps === 7) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.cps = 0; c.cpI = i; onLap(c, lt, now); }
   }
   c.prog = i;
 }
@@ -79,6 +81,18 @@ function applyState(id, s) {
   const r = G.rem.get(id); if (!r) return; r.raw = s; const c = r.car, now = performance.now();
   if (!r.tgt) { c.x = s[0]; c.y = s[1]; c.a = s[2]; }
   r.tgt = { x: s[0], y: s[1], a: s[2], vx: s[3], vy: s[4], t: now }; c.steer = s[5]; c.drift = !!(s[6] & 1); c.brake = !!(s[6] & 2); c.hb = !!(s[6] & 4); c.lap = s[7]; c.prog = s[8]; c.score = s[9]; c.finished = s[10];
+}
+// ---- Time trial rolling start + resets ----
+const TT_RUNUP = 0.28; // fraction of a lap behind the start line (per-track override: ttRunup)
+function placeAt(c, i) { const p = G.tr.pts[i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[i]; c.vx = c.vy = 0; c.vF = 0; c.speed = 0; c.steer = 0; c.hint = i; c.prog = i; c.cur = 0; c.combo = 1; c.comboT = 0; c.idle = 0; c.drift = false; c.rwL = c.rwR = null; c.wrong = 0; }
+function ttPlace(c) { const n = G.tr.n, i = (n - Math.round(n * (G.tr.def.ttRunup || TT_RUNUP))) % n; c.spawnI = i; placeAt(c, i); c.lap = -1; c.cps = 0; c.cpI = undefined; c.lapStart = 0; }
+function resetToStart(c) {
+  if (G.cfg.mode === 'tt') { ttPlace(c); pop('↺ Back to rolling start', '#9fd8ff'); }
+  else resetCar(c);
+}
+function resetToCheckpoint(c) {
+  const i = c.cpI !== undefined ? c.cpI : (c.spawnI !== undefined ? c.spawnI : nearestFull(G.tr, c.x, c.y).i);
+  placeAt(c, i); pop('↺ Checkpoint', '#9fd8ff');
 }
 function resetCar(c) { const nr = nearestFull(G.tr, c.x, c.y), p = G.tr.pts[nr.i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[nr.i]; c.vx = c.vy = 0; c.hint = nr.i; c.cur = 0; c.drift = false; }
 function inputs() { const k = KEYS; return { up: k.w || k.arrowup, down: k.s || k.arrowdown, left: k.a || k.arrowleft, right: k.d || k.arrowright, hb: k[' '] }; }

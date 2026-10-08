@@ -9,7 +9,8 @@ Top-down drift racing in the browser. Play solo or race your friends online. No 
 | S / ↓ | Brake / reverse |
 | A D / ← → | Steer |
 | SPACE | Handbrake (start a drift) |
-| R | Reset car onto the track |
+| R | Reset (Time trial: back to the rolling start; other modes: back onto the track) |
+| F | Reset to your last checkpoint |
 | C | Toggle top-down / chase camera |
 | T | Chat (online) |
 | M | Mute |
@@ -20,6 +21,7 @@ Top-down drift racing in the browser. Play solo or race your friends online. No 
 ## Modes
 - **Race:** fastest to finish the laps wins.
 - **Drift battle:** most drift points by the end wins.
+- **Time trial:** solo. You start a long way behind the line so you hit it at full speed; every lap is timed and your PB is saved. R restarts the run.
 - **Free roam:** set laps to "Free roam" to practise or mess around with friends.
 
 3 tracks: Sunset Circuit, Neon Docks (night) and Snowpeak Hairpins.
