@@ -8,19 +8,53 @@ function refreshMenu() {
   document.querySelectorAll('.tk').forEach(s => s.classList.toggle('on', +s.dataset.t === CFG.track));
   document.querySelectorAll('[data-mode]').forEach(s => s.classList.toggle('on', s.dataset.mode === CFG.mode));
   document.querySelectorAll('[data-l]').forEach(s => s.classList.toggle('on', +s.dataset.l === CFG.laps));
-  const r = rec(CFG.track); $('records').textContent = `Your records on ${TRACKS[CFG.track].name}: best lap ${fmt(r.lap)} • best drift score ${(r.score || 0).toLocaleString()}`;
+  document.querySelectorAll('[data-cam]').forEach(s => s.classList.toggle('on', +s.dataset.cam === (G.rot ? 1 : 0)));
+  document.querySelectorAll('[data-snd]').forEach(s => s.classList.toggle('on', +s.dataset.snd === (SND.muted ? 0 : 1)));
+  const r = rec(CFG.track); $('records').innerHTML = `<b>${esc(TRACKS[CFG.track].name)}</b><br>Best lap <b>${fmt(r.lap)}</b>`;
+}
+let BIND_CAP = null;
+const BIND_NAMES = { up: 'Throttle', down: 'Brake / reverse', left: 'Steer left', right: 'Steer right', hb: 'Handbrake', reset: 'Reset to start', cp: 'Reset to checkpoint', chat: 'Chat (online)', cam: 'Switch camera', mute: 'Mute sound' };
+function keyName(k) { return k === ' ' ? 'SPACE' : ({ arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→' })[k] || k.toUpperCase(); }
+function renderBinds() {
+  $('binds').innerHTML = Object.keys(BIND_NAMES).map(a => `<div class="bind"><span>${BIND_NAMES[a]}</span><button class="kb${BIND_CAP === a ? ' cap' : ''}" data-b="${a}">${BIND_CAP === a ? 'Press a key…' : esc(keyName(CFG.binds[a]))}</button></div>`).join('');
+  document.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { BIND_CAP = b.dataset.b; renderBinds(); });
+}
+function showMp(m) {
+  CFG.mpTab = m; saveCfg(); msg('menuMsg');
+  $('mp-join').classList.toggle('hidden', m !== 'join'); $('mp-host').classList.toggle('hidden', m !== 'host');
+  document.querySelectorAll('.sub2').forEach(b => b.classList.toggle('on', b.dataset.mp === m));
+}
+function showPane(p) {
+  CFG.pane = p; saveCfg(); msg('menuMsg');
+  document.querySelectorAll('.pane').forEach(e => e.classList.toggle('hidden', e.id !== 'p-' + p));
+  document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+}
+function trackThumb(i) {
+  const t = TRACKS[i], tr = buildTrack(i, true), c = document.createElement('canvas'); c.width = 240; c.height = 150;
+  const g = c.getContext('2d'), s = Math.min(212 / tr.W, 122 / tr.H);
+  const bg = g.createLinearGradient(0, 0, 240, 150); bg.addColorStop(0, '#16161a'); bg.addColorStop(1, '#0b0b0d'); g.fillStyle = bg; g.fillRect(0, 0, 240, 150);
+  g.translate((240 - tr.W * s) / 2, (150 - tr.H * s) / 2); g.scale(s, s); g.lineJoin = g.lineCap = 'round'; pathTrack(g, tr);
+  g.strokeStyle = 'rgba(225,6,0,.25)'; g.lineWidth = 11 / s; g.stroke(); g.strokeStyle = '#ff2a1f'; g.lineWidth = 3.5 / s; g.stroke();
+  const p = tr.pts[0], d = tr.dirs[0]; g.strokeStyle = '#fff'; g.lineWidth = 3 / s; g.beginPath(); g.moveTo(p[0] - Math.sin(d) * 9 / s, p[1] + Math.cos(d) * 9 / s); g.lineTo(p[0] + Math.sin(d) * 9 / s, p[1] - Math.cos(d) * 9 / s); g.stroke();
+  return { c, info: t.pxm ? (tr.len / t.pxm / 1000).toFixed(2) + ' km • real circuit' : 'Original circuit' };
 }
 function buildMenu() {
+  if (CFG.mode === 'tt') CFG.mode = 'race'; if (!(CFG.track < TRACKS.length)) CFG.track = 0; G.rot = !!CFG.cam;
   COLORS.forEach(c => { const s = document.createElement('div'); s.className = 'sw'; s.style.background = c; s.dataset.c = c; s.onclick = () => { CFG.color = c; saveCfg(); refreshMenu(); }; $('colors').appendChild(s); });
-  TRACKS.forEach((t, i) => { const d = document.createElement('div'); d.className = 'tk'; d.dataset.t = i; const c = document.createElement('canvas'); c.width = 200; c.height = 120; const g = c.getContext('2d'), tr = buildTrack(i, true), s = Math.min(180 / WORLD_W, 100 / WORLD_H);
-    g.fillStyle = t.th.grass; g.fillRect(0, 0, 200, 120); g.translate(10, 10); g.scale(s, s); g.lineJoin = 'round'; pathTrack(g, tr); g.strokeStyle = t.th.night ? '#ff2fb0' : '#d8262f'; g.lineWidth = tr.w + 80; g.stroke(); g.strokeStyle = t.th.road; g.lineWidth = tr.w + 20; g.stroke();
-    d.appendChild(c); d.appendChild(document.createTextNode(t.name)); d.onclick = () => { CFG.track = i; saveCfg(); refreshMenu(); }; $('tracks').appendChild(d); });
+  TRACKS.forEach((t, i) => { const th = trackThumb(i);
+    for (const grid of ['ttTracks', 'mpTracks']) { const d = document.createElement('div'); d.className = 'tk'; d.dataset.t = i; const c = document.createElement('canvas'); c.width = 240; c.height = 150; c.getContext('2d').drawImage(th.c, 0, 0);
+      d.appendChild(c); d.insertAdjacentHTML('beforeend', `<b>${esc(t.name)}</b><small>${th.info}</small>`); d.onclick = () => { CFG.track = i; saveCfg(); refreshMenu(); }; d.ondblclick = () => { if (grid === 'ttTracks') $('bSolo').click(); }; $(grid).appendChild(d); } });
+  document.querySelectorAll('.nav').forEach(b => b.onclick = () => showPane(b.dataset.p));
+  document.querySelectorAll('.sub2').forEach(b => b.onclick = () => showMp(b.dataset.mp));
+  $('bindReset').onclick = () => { CFG.binds = Object.assign({}, DEF_BINDS); BIND_CAP = null; saveCfg(); renderBinds(); };
+  renderBinds(); showMp(CFG.mpTab || 'join');
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { CFG.mode = b.dataset.mode; saveCfg(); refreshMenu(); });
   document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { CFG.laps = +b.dataset.l; saveCfg(); refreshMenu(); });
+  document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => { CFG.cam = +b.dataset.cam; G.rot = !!CFG.cam; saveCfg(); refreshMenu(); });
+  document.querySelectorAll('[data-snd]').forEach(b => b.onclick = () => { if ((+b.dataset.snd === 1) === SND.muted) sndMute(); refreshMenu(); });
   $('nameIn').oninput = () => { CFG.name = $('nameIn').value.trim().slice(0, 14) || 'Driver'; saveCfg(); };
-  $('bSolo').onclick = () => { msg('menuMsg'); G.plist = []; startSession(emitCfg(), null, false); };
+  $('bSolo').onclick = () => { msg('menuMsg'); G.plist = []; startSession({ track: CFG.track, laps: 0, mode: 'tt' }, null, false); };
   $('bHost').onclick = () => {
-    if (CFG.mode === 'tt') { CFG.mode = 'race'; saveCfg(); refreshMenu(); } // time trial is solo
     if (!netAvailable()) return msg('menuMsg', 'Online play needs internet: the multiplayer library could not load.');
     msg('menuMsg', 'Creating room…'); $('bHost').disabled = true;
     netHost(CFG, e => { $('bHost').disabled = false; if (e) { netLeave(); return msg('menuMsg', netErrText(e)); } msg('menuMsg'); G.mp = true; G.state = 'lobby'; netLobby(); });
@@ -33,7 +67,7 @@ function buildMenu() {
   };
   $('bStart').onclick = () => { if (!NET.host) return; const grid = [...NET.players.keys()], cfg = emitCfg(); NET.inRace = true; G.plist = [...NET.players.values()]; netSend({ t: 'start', cfg, grid }); startSession(cfg, grid, true); };
   $('bLeave').onclick = toMenu;
-  refreshMenu();
+  showPane(CFG.pane || 'tt'); refreshMenu();
 }
 function showLobby(d) {
   if (d.players.length) G.plist = d.players; G.state = 'lobby';
@@ -74,17 +108,18 @@ function handleEsc() {
 }
 addEventListener('keydown', e => {
   sndInit();
+  if (BIND_CAP) { e.preventDefault(); const nk = e.key.toLowerCase(); if (nk !== 'escape') { for (const a in CFG.binds) if (CFG.binds[a] === nk) CFG.binds[a] = CFG.binds[BIND_CAP]; CFG.binds[BIND_CAP] = nk; saveCfg(); } BIND_CAP = null; renderBinds(); return; }
   if (document.activeElement === $('chatIn')) { if (e.key === 'Enter') { const t = $('chatIn').value.trim(); if (t) { if (NET.host) { const m = { t: 'chat', name: CFG.name, msg: t }; netSend(m); addChat(m); } else netSend({ t: 'chat', msg: t }); } $('chatIn').value = ''; $('chatIn').classList.add('hidden'); $('chatIn').blur(); } else if (e.key === 'Escape') { $('chatIn').classList.add('hidden'); $('chatIn').blur(); } return; }
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = e.key.toLowerCase(); KEYS[k] = true;
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
   if (G.state === 'race' && G.me) {
-    if (k === 'r' && !e.repeat) resetToStart(G.me);
-    if (k === 'f' && !e.repeat) resetToCheckpoint(G.me);
-    if (k === 't' && G.mp) { e.preventDefault(); $('chatIn').classList.remove('hidden'); $('chatIn').focus(); }
+    if (k === CFG.binds.reset && !e.repeat) resetToStart(G.me);
+    if (k === CFG.binds.cp && !e.repeat) resetToCheckpoint(G.me);
+    if (k === CFG.binds.chat && G.mp) { e.preventDefault(); $('chatIn').classList.remove('hidden'); $('chatIn').focus(); }
   }
-  if (k === 'c' && !e.repeat) { G.rot = !G.rot; pop(G.rot ? 'Chase camera' : 'Top-down camera'); }
-  if (k === 'm' && !e.repeat) pop(sndMute() ? 'Sound off' : 'Sound on');
+  if (k === CFG.binds.cam && !e.repeat) { G.rot = !G.rot; CFG.cam = G.rot ? 1 : 0; saveCfg(); pop(G.rot ? 'Chase camera' : 'Top-down camera'); }
+  if (k === CFG.binds.mute && !e.repeat) pop(sndMute() ? 'Sound off' : 'Sound on');
   if (k === 'escape') handleEsc();
 });
 addEventListener('keyup', e => { KEYS[e.key.toLowerCase()] = false; });

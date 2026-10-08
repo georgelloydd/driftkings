@@ -7,13 +7,17 @@ addEventListener('resize', resize); resize();
 const COLORS = ['#ff3b3b', '#ff8c1a', '#ffd60a', '#2ecc71', '#1ec8ff', '#3d6bff', '#a24dff', '#ff3fb4', '#f2f2f2', '#33363d'];
 const CFG = Object.assign({ name: 'Driver' + Math.floor(Math.random() * 900 + 100), color: COLORS[Math.floor(Math.random() * 8)], track: 0, mode: 'race', laps: 3 }, JSON.parse(localStorage.getItem('dk_cfg') || '{}'));
 function saveCfg() { localStorage.setItem('dk_cfg', JSON.stringify(CFG)); }
+const DEF_BINDS = { up: 'w', down: 's', left: 'a', right: 'd', hb: ' ', reset: 'r', cp: 'f', chat: 't', cam: 'c', mute: 'm' };
+CFG.binds = Object.assign({}, DEF_BINDS, CFG.binds || {});
 const G = { state: 'menu', tr: null, me: null, rem: new Map(), cfg: null, mp: false, t0: 0, cdEnd: 0, res: new Map(), resList: null, firstFin: 0, final: false, rot: false, cam: { x: WORLD_W / 2, y: WORLD_H / 2, z: 0.5, a: 0 }, smoke: [], snow: [], acc: 0, last: 0, sendT: 0, hudT: 0, plist: [], attract: null, ai: 0 };
 const KEYS = {};
 function fmt(ms) { if (!ms) return '--'; const m = Math.floor(ms / 60000), s = (ms % 60000) / 1000; return m + ':' + s.toFixed(2).padStart(5, '0'); }
 function pop(t, col) { const d = document.createElement('div'); d.className = 'pop'; d.style.color = col || '#fff'; d.textContent = t; $('pops').appendChild(d); setTimeout(() => d.remove(), 1400); }
 function banner(t, small) { $('banner').textContent = t; $('banner').className = small ? 'small' : ''; }
-function rec(tr) { return JSON.parse(localStorage.getItem('dk_rec_' + tr) || '{}'); }
-function setRec(tr, r) { localStorage.setItem('dk_rec_' + tr, JSON.stringify(r)); }
+function recKey(tr) { return 'dk_rec_' + (TRACKS[tr] ? TRACKS[tr].name : tr); }
+function rec(tr) { return JSON.parse(localStorage.getItem(recKey(tr)) || '{}'); }
+function setRec(tr, r) { localStorage.setItem(recKey(tr), JSON.stringify(r)); }
+if (!localStorage.getItem('dk_rec_v2')) { [['0', 'Sunset Circuit'], ['1', 'Neon Docks'], ['3', 'Monaco']].forEach(([o, n]) => { const v = localStorage.getItem('dk_rec_' + o); if (v && !localStorage.getItem('dk_rec_' + n)) localStorage.setItem('dk_rec_' + n, v); }); localStorage.setItem('dk_rec_v2', '1'); }
 function myId() { return G.mp ? NET.myId : 'me'; }
 
 function startSession(cfg, grid, mp) {
@@ -95,7 +99,7 @@ function resetToCheckpoint(c) {
   placeAt(c, i); pop('↺ Checkpoint', '#9fd8ff');
 }
 function resetCar(c) { const nr = nearestFull(G.tr, c.x, c.y), p = G.tr.pts[nr.i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[nr.i]; c.vx = c.vy = 0; c.hint = nr.i; c.cur = 0; c.drift = false; }
-function inputs() { const k = KEYS; return { up: k.w || k.arrowup, down: k.s || k.arrowdown, left: k.a || k.arrowleft, right: k.d || k.arrowright, hb: k[' '] }; }
+function inputs() { const k = KEYS; const b = CFG.binds; return { up: k[b.up] || k.arrowup, down: k[b.down] || k.arrowdown, left: k[b.left] || k.arrowleft, right: k[b.right] || k.arrowright, hb: k[b.hb] }; }
 
 const STEP = 1 / 120;
 function tick(ts) {
@@ -122,10 +126,10 @@ function tick(ts) {
   effects(dt); render(dt, now); hud(now); sndUpdate(me, true);
 }
 function effects(dt) {
-  const tg = G.tr.canvas.getContext('2d'), snow = G.tr.th.snow;
+  const snow = G.tr.th.snow;
   for (const c of [G.me, ...[...G.rem.values()].map(r => r.car)]) {
     const sliding = (c.drift || c.hb || (c.brake && c.speed > 500)) && c.speed > 120;
-    if (sliding) { const w = wheelPos(c); if (c.rwL) { tg.strokeStyle = snow ? 'rgba(110,120,135,.35)' : 'rgba(15,15,18,.32)'; tg.lineWidth = 7; tg.lineCap = 'round'; tg.beginPath(); tg.moveTo(c.rwL[0], c.rwL[1]); tg.lineTo(w[0][0], w[0][1]); tg.moveTo(c.rwR[0], c.rwR[1]); tg.lineTo(w[1][0], w[1][1]); tg.stroke(); } c.rwL = w[0]; c.rwR = w[1];
+    if (sliding) { const w = wheelPos(c); if (c.rwL) { const st = snow ? 'rgba(110,120,135,.35)' : 'rgba(15,15,18,.32)'; addSkid(G.tr, c.rwL[0], c.rwL[1], w[0][0], w[0][1], st); addSkid(G.tr, c.rwR[0], c.rwR[1], w[1][0], w[1][1], st); } c.rwL = w[0]; c.rwR = w[1];
       if (G.smoke.length < 450) for (const p of w) if (Math.random() < 0.8) G.smoke.push({ x: p[0], y: p[1], vx: (Math.random() - 0.5) * 40 - c.vx * 0.05, vy: (Math.random() - 0.5) * 40 - c.vy * 0.05, r: 8, life: 0, max: 0.9 + Math.random() * 0.8 }); }
     else c.rwL = c.rwR = null;
   }

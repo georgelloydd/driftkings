@@ -5,7 +5,7 @@ function drawWorld(tr, cam, cars, rot) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = shadeHex(th.grass, 0.55); ctx.fillRect(0, 0, VW, VH);
   ctx.save(); ctx.translate(VW / 2, VH / 2); if (rot) ctx.rotate(cam.a); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y);
   const hd = Math.hypot(VW, VH) / 2 / cam.z + 20, sx = Math.max(0, cam.x - hd), sy = Math.max(0, cam.y - hd), sw = Math.min(WORLD_W, cam.x + hd) - sx, sh = Math.min(WORLD_H, cam.y + hd) - sy;
-  if (sw > 0 && sh > 0) { const bs = tr.bs || 1; ctx.drawImage(tr.canvas, sx * bs, sy * bs, sw * bs, sh * bs, sx, sy, sw, sh); if (night) { ctx.fillStyle = 'rgba(4,6,22,.55)'; ctx.fillRect(sx, sy, sw, sh); } }
+  if (sw > 0 && sh > 0) { drawTiles(ctx, tr, sx, sy, sw, sh); if (night) { ctx.fillStyle = 'rgba(4,6,22,.55)'; ctx.fillRect(sx, sy, sw, sh); } }
   for (const p of G.smoke) { const a = (1 - p.life / p.max) * 0.32; ctx.fillStyle = night ? `rgba(170,180,230,${a})` : `rgba(238,238,242,${a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill(); }
   for (const c of cars) drawCar(ctx, c, night);
   ctx.restore();
@@ -27,7 +27,7 @@ function hud(now) {
   const me = G.me, d = $('driftBox');
   if (me.cur > 0) { d.classList.remove('hidden'); $('dPts').textContent = Math.round(me.cur).toLocaleString(); $('dCombo').textContent = 'x' + me.combo + (me.off ? ' ⚠' : ''); } else d.classList.add('hidden');
   if (now - G.hudT < 90) return; G.hudT = now;
-  $('spd').textContent = Math.round(me.speed * (G.tr.def.pxm ? 3.6 / G.tr.def.pxm : 0.25));
+  $('spd').textContent = Math.round(me.speed * (G.tr.def.pxm ? 0.3 : 0.25));
   const L = G.cfg.laps; $('hLap').querySelector('b').textContent = Math.min(L, Math.max(1, me.lap + 1)) + '/' + L;
   const t = G.cfg.mode === 'tt' ? (me.lap >= 0 && G.state === 'race' ? now - me.lapStart : 0) : (me.finished || (G.state === 'race' ? now - G.t0 : 0)); $('hTime').querySelector('b').textContent = fmt(t) === '--' ? '0:00.00' : fmt(t);
   $('hBest').querySelector('b').textContent = fmt(me.best); $('hScore').querySelector('b').textContent = me.score.toLocaleString();

@@ -27,26 +27,56 @@
 <input id="chatIn" class="hidden" maxlength="80" placeholder="Say something... (Enter to send)">
 
 <div id="menu" class="screen">
-  <h1>DRIFT <span>KINGS</span></h1>
-  <p class="sub">Top-down drift racing • play with friends online</p>
-  <div class="panel">
-    <label>Driver name <input id="nameIn" maxlength="14"></label>
-    <label>Car colour</label><div id="colors"></div>
-    <label>Track</label><div id="tracks"></div>
-    <label>Mode</label>
-    <div class="row"><button class="opt" data-mode="race">🏁 Race (fastest wins)</button><button class="opt" data-mode="tt">⏱ Time trial (solo)</button><button class="opt" data-mode="drift">💨 Drift battle (most points)</button></div>
-    <label>Laps</label>
-    <div class="row" id="laps"><button class="opt" data-l="1">1</button><button class="opt" data-l="3">3</button><button class="opt" data-l="5">5</button><button class="opt" data-l="0">Free roam</button></div>
-    <div class="row big">
-      <button id="bSolo" class="btn green">▶ Play solo</button>
-      <button id="bHost" class="btn blue">🌐 Host online race</button>
+  <aside class="side">
+    <div class="logo">DRIFT<span>KINGS</span></div>
+    <nav>
+      <button class="nav" data-p="tt">Time Trial</button>
+      <button class="nav" data-p="mp">Multiplayer</button>
+      <button class="nav" data-p="set">Settings</button>
+    </nav>
+    <div class="ver">v1.3.0</div>
+  </aside>
+
+  <main class="pane" id="p-tt">
+    <h2 class="ph">Time Trial</h2>
+    <label>Select Track:</label>
+    <div class="tgrid" id="ttTracks"></div>
+    <div class="foot"><p id="records" class="rec"></p><button id="bSolo" class="btn drift">DRIFT</button></div>
+  </main>
+
+  <main class="pane hidden" id="p-mp">
+    <h2 class="ph">Multiplayer</h2>
+    <div class="subtabs"><button class="sub2" data-mp="join">Join Room</button><button class="sub2" data-mp="host">Host a Room</button></div>
+    <div id="mp-join" class="mpp">
+      <label>Room code</label>
+      <div class="row joinrow"><input id="codeIn" maxlength="5" placeholder="ABCDE"><button id="bJoin" class="btn red">Join Room</button></div>
+      <p class="rec">Ask the host for their 5-letter code. The host picks the track, mode and laps.</p>
     </div>
-    <div class="row big"><input id="codeIn" maxlength="5" placeholder="ROOM CODE"><button id="bJoin" class="btn orange">Join friend</button></div>
-    <p id="menuMsg" class="msg"></p>
-    <p id="records" class="rec"></p>
-    <p class="rec" style="opacity:.45">v1.2.1</p>
-  </div>
-  <p class="keys">W/↑ throttle • S/↓ brake/reverse • A D/← → steer • SPACE handbrake • R reset (time trial: back to rolling start) • F reset to last checkpoint • C rotate camera • M mute • T chat • ESC menu</p>
+    <div id="mp-host" class="mpp hidden">
+    <label>Select Track:</label>
+    <div class="tgrid" id="mpTracks"></div>
+    <div class="cols mpb">
+      <div><label>Mode</label><div class="row"><button class="opt" data-mode="race">Race</button><button class="opt" data-mode="drift">Drift battle</button></div></div>
+      <div><label>Laps</label><div class="row" id="laps"><button class="opt" data-l="1">1</button><button class="opt" data-l="3">3</button><button class="opt" data-l="5">5</button><button class="opt" data-l="0">Free roam</button></div></div>
+    </div>
+    <div class="foot"><p class="rec">You'll get a 5-letter room code to share with friends.</p><button id="bHost" class="btn drift">HOST</button></div>
+    </div>
+  </main>
+
+  <main class="pane hidden" id="p-set">
+    <h2 class="ph">Settings</h2>
+    <div class="setw">
+      <label>Driver name</label><input id="nameIn" maxlength="14">
+      <label>Car colour</label><div id="colors"></div>
+      <label>Camera</label><div class="row"><button class="opt" data-cam="0">Top-down</button><button class="opt" data-cam="1">Chase</button></div>
+      <label>Sound</label><div class="row"><button class="opt" data-snd="1">On</button><button class="opt" data-snd="0">Off</button></div>
+      <label>Keybinds</label>
+      <div id="binds" class="binds"></div>
+      <div class="row" style="margin-top:12px;max-width:260px"><button class="opt" id="bindReset">Reset to defaults</button></div>
+      <p class="rec">Click a key, then press the new one (Esc cancels). Arrow keys always drive too. Esc opens the menu.</p>
+    </div>
+  </main>
+  <p id="menuMsg" class="msg"></p>
 </div>
 
 <div id="lobby" class="screen hidden">
@@ -56,7 +86,7 @@
   <div class="panel">
     <div id="lobbyCfg"></div>
     <ul id="plist"></ul>
-    <div class="row big"><button id="bStart" class="btn green">Start race</button><button id="bLeave" class="btn red">Leave</button></div>
+    <div class="row big"><button id="bStart" class="btn red">Start race</button><button id="bLeave" class="btn dark">Leave</button></div>
     <p id="lobbyMsg" class="msg"></p>
   </div>
 </div>
