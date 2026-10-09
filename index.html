@@ -4,9 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mini Drifters</title>
-<link rel="stylesheet" href="style.css?v=20261009100234">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="style.css?v=20261009111441">
 </head>
 <body>
 <canvas id="cv"></canvas>
@@ -25,13 +23,10 @@
 <div id="banner"></div>
 <div id="pops"></div>
 <div id="board" class="hidden"></div>
-<div id="chatlog"></div>
-<div id="dupOv" class="hidden"><div class="dupBox"><h2>PLAYING SOMEWHERE ELSE</h2><p id="dupMsg"></p><button id="dupBtn">PLAY HERE INSTEAD</button><small>This will close the game in the other tab or device.</small></div></div>
-<input id="chatIn" class="hidden" maxlength="120" placeholder="Say something... (Enter to send)">
 
 <div id="menu" class="screen">
   <nav id="nav">
-    <div class="logo"><small>MINI</small>DRIFTERS<div id="chatHint" class="hidden"></div></div>
+    <div class="logo"><small>MINI</small>DRIFTERS</div>
     <button class="nv on" data-tab="tt">Time Trial</button>
     <button class="nv" data-tab="mp">Multiplayer</button>
     <button class="nv" data-tab="garage">Garage</button>
@@ -48,7 +43,7 @@
       <div class="row big"><button id="bSolo" class="btn primary">▶ Start time trial</button></div>
       <p id="ttMsg" class="msg"></p>
       <p id="records" class="rec"></p>
-      <p class="keys" id="keysP">W/↑ throttle · S/↓ brake · A D/← → steer · SPACE handbrake · R reset · F checkpoint · C camera · M mute · T global chat · ESC menu</p>
+      <p class="keys" id="keysP">W/↑ throttle · S/↓ brake · A D/← → steer · SPACE handbrake · R reset · F checkpoint · C camera · M mute · ESC menu</p>
     </section>
     <section class="tab hidden" id="tab-mp">
       <h1>MULTIPLAYER</h1><div class="bar"></div>
@@ -141,18 +136,18 @@
   </div>
 </div>
 
-<script src="js/storage-reset.js?v=20261009100234"></script>
-<script src="js/config.js?v=20261009100234"></script>
-<script src="js/track.js?v=20261009100234"></script>
-<script src="js/car.js?v=20261009100234"></script>
-<script src="js/cars.js?v=20261009100234"></script>
-<script src="js/net.js?v=20261009100234"></script>
-<script src="js/session.js?v=20261009100234"></script>
-<script src="js/chat.js?v=20261009100234"></script>
-<script src="js/audio.js?v=20261009100234"></script>
-<script src="js/main.js?v=20261009100234"></script>
-<script src="js/account.js?v=20261009100234"></script>
-<script src="js/render.js?v=20261009100234"></script>
-<script src="js/ui.js?v=20261009100234"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/config.js?v=20261009111441"></script>
+<script src="js/track.js?v=20261009111441"></script>
+<script src="js/car.js?v=20261009111441"></script>
+<script src="js/cars.js?v=20261009111441"></script>
+<script src="js/net.js?v=20261009111441"></script>
+<script src="js/session.js?v=20261009111441"></script>
+<script src="js/audio.js?v=20261009111441"></script>
+<script src="js/main.js?v=20261009111441"></script>
+<script src="js/account.js?v=20261009111441"></script>
+<script src="js/render.js?v=20261009111441"></script>
+<script src="js/ui.js?v=20261009111441"></script>
 </body>
 </html>

@@ -12,8 +12,8 @@ function refreshMenu() {
   document.querySelectorAll('[data-mode]').forEach(s => s.classList.toggle('on', s.dataset.mode === CFG.mode));
   document.querySelectorAll('[data-l]').forEach(s => s.classList.toggle('on', +s.dataset.l === CFG.laps));
   document.querySelectorAll('.ty').forEach(s => { s.classList.toggle('on', s.dataset.b === CFG.body); drawCarPreview(s.querySelector('canvas'), Object.assign(carLook(CFG), { body: s.dataset.b }), -0.35); });
-  $('hostNet').textContent = netMode() === 'servers' ? 'Runs on the online servers: friends can join from any network.' : 'Peer-to-peer (no Supabase set up): works best when everyone is on the same wifi.';
-  $('pubChk').disabled = netMode() !== 'servers'; $('pubRow').classList.toggle('dim', netMode() !== 'servers'); $('pubRow').title = netMode() === 'servers' ? '' : 'Needs Supabase set up';
+  $('hostNet').textContent = netAvailable() ? 'Peer-to-peer: no server needed. Works best when everyone is on the same Wi-Fi.' : netNeedText();
+  $('pubChk').disabled = !listOn(); $('pubRow').classList.toggle('dim', !listOn()); $('pubRow').title = listOn() ? '' : 'Needs Supabase set up (js/config.js)';
   const r = rec(CFG.track); $('records').textContent = `Your records on ${TRACKS[CFG.track].name}: best lap ${fmt(ACCT.bestLap(CFG.track) || r.lap)} • best drift score ${(r.score || 0).toLocaleString()}`;
   const t = carType(CFG.body); $('gDesc').textContent = t.name.toUpperCase() + ' · ' + t.desc;
   drawCarPreview($('gPrev'), carLook(CFG), -0.5);
@@ -45,9 +45,9 @@ function refreshAcct() {
 }
 function renderServers(list) {
   const box = $('servers');
-  if (list === null) { $('srvMode').textContent = '· peer-to-peer'; box.innerHTML = '<p class="hint">No open servers list yet: add your Supabase details in deploy.html to get online servers anyone can join from any network. For now, enter your friend\'s code above (peer-to-peer, best on the same wifi).</p>'; return; }
-  $('srvMode').textContent = '· online · ' + list.length + ' open';
-  box.innerHTML = list.length ? list.map(v => `<div class="srv"><b>${esc(v.host)}</b><span>${esc((TRACKS[v.track] || {}).name || '')} · ${esc(String(v.mode || '').toUpperCase())}${v.laps ? ' · ' + v.laps + ' laps' : ''}</span><span>${v.players}/8</span>${v.inRace ? '<em>RACING</em>' : `<button class="btn dark sm" data-code="${esc(v.code)}">Join</button>`}</div>`).join('') : '<p class="hint">No open rooms right now. Create one in Host Room and it will show up here for everyone.</p>';
+  if (list === null) { $('srvMode').textContent = '· peer-to-peer'; box.innerHTML = '<p class="hint">' + (netAvailable() ? 'Ask the host for their 5-letter code and type it above. (With Supabase set up, open rooms also show here.)' : esc(netNeedText())) + '</p>'; return; }
+  $('srvMode').textContent = '· ' + list.length + ' open';
+  box.innerHTML = list.length ? list.map(v => `<div class="srv"><b>${esc(v.host)}</b><span>${esc((TRACKS[v.track] || {}).name || '')} · ${esc(String(v.mode || '').toUpperCase())}${v.laps ? ' · ' + v.laps + ' laps' : ''}</span><span>${v.players} driver${v.players === 1 ? '' : 's'}</span>${v.inRace ? '<em>RACING</em>' : `<button class="btn dark sm" data-code="${esc(v.code)}">Join</button>`}</div>`).join('') : '<p class="hint">No open rooms right now. Create one in Host Room and it will show up here.</p>';
   box.querySelectorAll('[data-code]').forEach(b => b.onclick = () => { if (G.state !== 'menu') return; $('codeIn').value = b.dataset.code; $('bJoin').click(); });
 }
 function buildMenu() {
@@ -66,8 +66,8 @@ function buildMenu() {
   $('numIn').oninput = () => { CFG.num = $('numIn').value.replace(/\D/g, '').slice(0, 2); saveCfg(); refreshMenu(); };
   CAR_TYPES.forEach(t => { const d = document.createElement('div'); d.className = 'ty'; d.dataset.b = t.id; const c = document.createElement('canvas'); c.width = 120; c.height = 70; d.appendChild(c); d.appendChild(document.createTextNode(t.name)); d.onclick = () => { CFG.body = t.id; saveCfg(); refreshMenu(); }; $('types').appendChild(d); });
   LIVERIES.forEach(l => { const d = document.createElement('div'); d.className = 'lvt'; d.dataset.lv = l.id; const c = document.createElement('canvas'); c.width = 110; c.height = 64; d.appendChild(c); d.appendChild(document.createTextNode(l.name)); d.onclick = () => { CFG.livery = l.id; saveCfg(); refreshMenu(); }; $('livs').appendChild(d); });
-  TRACKS.forEach((t, i) => { if (t.test || t.hidden) return; const d = document.createElement('div'); d.className = 'tk'; d.dataset.t = i; const c = document.createElement('canvas'); c.width = 200; c.height = 120; const g = c.getContext('2d'), tr = buildTrack(i, true), s = Math.min(180 / WORLD_W, 100 / WORLD_H);
-    g.fillStyle = '#0e0e10'; g.fillRect(0, 0, 200, 120); g.translate(10, 10); g.scale(s, s); g.lineJoin = 'round'; pathTrack(g, tr); g.strokeStyle = '#ff2a2a'; g.lineWidth = tr.w + 80; g.shadowColor = '#ff2a2a'; g.shadowBlur = 14; g.stroke(); g.shadowBlur = 0; g.strokeStyle = '#1c1c20'; g.lineWidth = tr.w + 10; g.stroke();
+  TRACKS.forEach((t, i) => { if (t.test || t.hidden) return; const d = document.createElement('div'); d.className = 'tk'; d.dataset.t = i; const c = document.createElement('canvas'); c.width = 200; c.height = 120; const g = c.getContext('2d'), tr = buildTrack(i, true), s = Math.min(180 / tr.W, 100 / tr.H);
+    g.fillStyle = '#0e0e10'; g.fillRect(0, 0, 200, 120); g.translate(10, 10); g.scale(s, s); g.lineJoin = 'round'; pathTrack(g, tr); g.strokeStyle = '#ff2a2a'; g.lineWidth = Math.max(tr.w + 80, 8 / s); g.shadowColor = '#ff2a2a'; g.shadowBlur = 14; g.stroke(); g.shadowBlur = 0; g.strokeStyle = '#1c1c20'; g.lineWidth = Math.max(tr.w + 10, 3 / s); g.stroke();
     const sp = document.createElement('span'); sp.textContent = t.name; d.appendChild(c); d.appendChild(sp); d.onclick = () => { CFG.track = i; saveCfg(); refreshMenu(); }; $('tracks').appendChild(d);
     const b = document.createElement('button'); b.className = 'opt'; b.dataset.lbt = i; b.textContent = t.name; b.onclick = () => { LBT = i; loadLB(); }; $('lbTracks').appendChild(b); });
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { CFG.mode = b.dataset.mode; saveCfg(); refreshMenu(); });
@@ -93,24 +93,24 @@ function buildMenu() {
   $('bNew').onclick = async () => { if (!confirm('Start a new account? Copy your current key or backup code first if you want to come back to it.')) return; await ACCT.create(); KEYSHOWN = true; refreshMenu(); msg('acctMsg', 'New account created. Copy your key now.'); };
   $('bSolo').onclick = () => { msg('menuMsg'); G.plist = []; startSession({ track: CFG.track, laps: 0, mode: 'tt' }, null, false); };
   $('bHost').onclick = () => {
-    if (!netAvailable()) return msg('hostMsg', 'Online play needs internet: the multiplayer library could not load.');
+    if (!netAvailable()) return msg('hostMsg', netNeedText());
     msg('hostMsg', 'Creating room…'); $('bHost').disabled = true;
     netHost(CFG, e => { $('bHost').disabled = false; if (e) { netLeave(); return msg('hostMsg', netErrText(e)); } msg('hostMsg'); G.mp = true; G.state = 'lobby'; netLobby(); });
   };
   $('bJoin').onclick = () => {
     const code = $('codeIn').value.trim().toUpperCase(); if (code.length !== 5) return msg('menuMsg', 'Enter the 5-letter room code from your friend.');
-    if (!netAvailable()) return msg('menuMsg', 'Online play needs internet: the multiplayer library could not load.');
+    if (!netAvailable()) return msg('menuMsg', netNeedText());
     msg('menuMsg', 'Connecting to room ' + code + '…'); $('bJoin').disabled = true;
     netJoin(code, CFG, e => { $('bJoin').disabled = false; if (e) { netLeave(); return msg('menuMsg', netErrText(e)); } msg('menuMsg'); G.mp = true; G.state = 'lobby'; showLobby({ players: [], cfg: {} }); msg('lobbyMsg', 'Connected! Waiting for the host…'); });
   };
-  $('bStart').onclick = () => { if (!NET.host) return; const grid = [...NET.players.keys()], cfg = emitCfg(); NET.inRace = true; G.plist = [...NET.players.values()]; netSend({ t: 'start', cfg, grid }); startSession(cfg, grid, true); };
+  $('bStart').onclick = () => { if (!NET.host) return; const grid = shuffle([...NET.players.keys()]), cfg = emitCfg(), rid = Date.now() % 1e9; NET.inRace = true; G.plist = [...NET.players.values()]; netSend({ t: 'start', cfg, grid, rid }); startSession(cfg, grid, true, rid); };
   $('bLeave').onclick = toMenu;
   refreshMenu();
 }
 function showLobby(d) {
   if (d.players.length) G.plist = d.players; G.state = 'lobby';
   for (const s of ['hud', 'speedo', 'mini', 'board', 'driftBox', 'menu']) $(s).classList.add('hidden'); $('lobby').classList.remove('hidden'); banner('');
-  $('roomCode').textContent = NET.code; $('lobbyHint').innerHTML = NET.rt ? (NET.public ? 'Your room is on the public <b>Servers</b> list. Or send this code to friends: it works from any network.' : 'Private room. Send this code to friends: it works from any network.') : 'Send this code to your friends. They open the game and press <b>Join friend</b>.';
+  $('roomCode').textContent = NET.code; $('lobbyHint').innerHTML = NET.host ? (NET.public ? (listOn() ? 'Your room shows in <b>Open rooms</b>. Or tell friends the code.' : 'Tell friends this code. They press <b>Join friend</b> (same Wi-Fi works best).') : 'Private room. Tell friends this code.') : 'You are in the room. The host starts the race.';
   $('plist').innerHTML = G.plist.map(p => `<li><i style="background:${p.color}"></i>${esc(p.name)} <span class="dim">· ${esc(carType(p.body).name)}</span>${p.id === 'host' ? ' 👑' : ''}${p.id === NET.myId ? ' (you)' : ''}</li>`).join('');
   const c = d.cfg && d.cfg.track !== undefined ? d.cfg : emitCfg();
   if (NET.host) {
@@ -120,25 +120,22 @@ function showLobby(d) {
     $('lcM').onclick = () => { CFG.mode = CFG.mode === 'race' ? 'drift' : 'race'; saveCfg(); netLobby(); };
     $('bStart').classList.remove('hidden'); $('bStart').textContent = G.plist.length > 1 ? `Start race (${G.plist.length} drivers)` : 'Start (waiting for friends…)';
     msg('lobbyMsg', G.plist.length > 1 ? '' : 'Share the code above. You can also start alone to test.');
-    $('lobbyHint').innerHTML = 'Send this code to your friends. They open the game and press <b>Join friend</b>.';
   } else {
     $('lobbyCfg').textContent = c.track !== undefined ? `Track: ${TRACKS[c.track].name} • ${c.laps ? c.laps + ' laps' : 'Free roam'} • ${MODES[c.mode]}` : '';
     $('bStart').classList.add('hidden'); $('lobbyHint').textContent = 'You are in the room. The host starts the race.'; if (G.plist.length) msg('lobbyMsg', 'Waiting for the host to start…');
     if (c.track !== undefined && G.attract && G.attract.idx !== c.track) CFG.track = c.track;
   }
 }
-function addChat(m) { const c = chatClean({ name: m.name, msg: m.msg, room: true }); if (c) chatLine(c); }
 netOn('lobby', showLobby);
-netOn('start', d => startSession(d.cfg, d.grid, true));
+netOn('start', d => startSession(d.cfg, d.grid, true, d.rid));
 netOn('all', d => { if (G.state !== 'race' && G.state !== 'countdown') return; for (const row of d.list) if (row[0] !== NET.myId) applyState(row[0], row.slice(1)); });
 netOn('st', d => { if (G.state === 'race' || G.state === 'countdown') applyState(d.id, d.s); });
-netOn('fin', d => { if (G.state === 'race') hostFin(d.id, d.time, d.score); });
-netOn('res', d => { if (!NET.host && G.me) applyRes(d.list, d.final); });
+netOn('fin', d => { if (G.state === 'race') hostFin(d.id, d.time, d.score, d.laps, d.rid); });
+netOn('res', d => { if (!NET.host && G.me && (d.rid || 0) === G.rid) applyRes(d.list, d.final); });
 netOn('hostgone', () => { toMenu(); msg('menuMsg', 'The host left, so the room has closed.'); });
 netOn('busy', d => { toMenu(); msg('menuMsg', d.msg); });
 netOn('neterror', e => msg(G.state === 'lobby' ? 'lobbyMsg' : 'menuMsg', netErrText(e)));
 netOn('left', id => { const r = G.rem.get(id); if (r && G.state !== 'lobby') { pop(r.car.name + ' left', '#aaa'); G.rem.delete(id); if (G.firstFin) hostRes(false); } });
-netOn('chat', addChat);
 netOn('joined', () => { });
 function handleEsc() {
   if (G.tt && G.state === 'race') endTT(); else if (G.state === 'over') toMenu(); else if (G.state === 'race' || G.state === 'countdown') { if (!G.mp) toMenu(); else if (NET.host) { if (confirm('End the race for everyone and go back to the lobby?')) hostToLobby(); } else if (confirm('Leave the room?')) toMenu(); }
@@ -147,11 +144,9 @@ function handleEsc() {
 addEventListener('keydown', e => {
   if (SESS.blocked) return;
   sndInit();
-  if (document.activeElement === $('chatIn')) { if (e.key === 'Enter') { chatSend($('chatIn').value); chatClose(); } else if (e.key === 'Escape') chatClose(); return; }
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = e.key.toLowerCase(), B = CFG.keys;
   if (BINDING) { e.preventDefault(); if (k !== 'escape') setBind(BINDING, k); BINDING = null; renderBinds(); return; }
-  if (k === B.chat && !e.repeat && G.state !== 'countdown') { e.preventDefault(); chatOpen(); return; }
   KEYS[k] = true;
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) || (k === B.hb && G.state !== 'menu')) e.preventDefault();
   if (G.state === 'race' && G.me) {
@@ -169,7 +164,7 @@ Promise.all([ACCT.load().catch(e => console.warn(e)), loadTracks()]).then(() => 
 
 // ===== Settings: keybinds + graphics =====
 let BINDING = null;
-const BIND_ACTIONS = [['up', 'Throttle'], ['down', 'Brake / reverse'], ['left', 'Steer left'], ['right', 'Steer right'], ['hb', 'Handbrake'], ['reset', 'Reset (time trial: restart lap)'], ['cp', 'Back to last checkpoint'], ['cam', 'Switch camera'], ['mute', 'Mute sound'], ['chat', 'Chat (multiplayer)']];
+const BIND_ACTIONS = [['up', 'Throttle'], ['down', 'Brake / reverse'], ['left', 'Steer left'], ['right', 'Steer right'], ['hb', 'Handbrake'], ['reset', 'Reset (time trial: restart lap)'], ['cp', 'Back to last checkpoint'], ['cam', 'Switch camera'], ['mute', 'Mute sound']];
 function keyName(k) { if (!k) return '?'; if (k === ' ') return 'SPACE'; const A = { arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→' }; return A[k] || k.toUpperCase(); }
 function setBind(a, k) { for (const x in CFG.keys) if (x !== a && CFG.keys[x] === k) CFG.keys[x] = CFG.keys[a]; CFG.keys[a] = k; saveCfg(); keysHint(); }
 function renderBinds() {
@@ -183,7 +178,7 @@ function renderGfx() {
 }
 function keysHint() {
   const B = CFG.keys, n = k => esc(keyName(k));
-  $('keysP').innerHTML = `${n(B.up)}/↑ throttle · ${n(B.down)}/↓ brake · ${n(B.left)} ${n(B.right)}/← → steer · ${n(B.hb)} handbrake · ${n(B.reset)} reset · ${n(B.cp)} checkpoint · ${n(B.cam)} camera · ${n(B.mute)} mute · ${n(B.chat)} chat · ESC menu`;
+  $('keysP').innerHTML = `${n(B.up)}/↑ throttle · ${n(B.down)}/↓ brake · ${n(B.left)} ${n(B.right)}/← → steer · ${n(B.hb)} handbrake · ${n(B.reset)} reset · ${n(B.cp)} checkpoint · ${n(B.cam)} camera · ${n(B.mute)} mute · ESC menu`;
   $('ttHint').innerHTML = `Endless laps until you quit. <b>${n(B.reset)}</b> restarts the lap · <b>${n(B.cp)}</b> back to last checkpoint · <b>ESC</b> ends the session. Drive through the numbered gates in order; the next one glows yellow.`;
 }
 $('bBindReset').onclick = () => { CFG.keys = Object.assign({}, DEF_KEYS); BINDING = null; saveCfg(); renderBinds(); keysHint(); };

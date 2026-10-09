@@ -6,7 +6,7 @@ Play: https://georgelloydd.github.io/minidrifters/
 
 ## Modes
 - **Time trial (endless)**: laps go on until you quit. **R** restarts the lap from the start line, **F** puts you back at the last checkpoint, **ESC** ends the session and shows a summary.
-- **Race / Drift battle**: solo, or online with friends using a 5-letter room code (PeerJS, peer to peer).
+- **Race / Drift battle**: solo, or with friends using a 5-letter room code (peer-to-peer with PeerJS, best on the same Wi-Fi). No player limit, random grid, chequered flag when the winner finishes, finished cars turn into ghosts.
 
 ## Controls
 W/↑ throttle · S/↓ brake · A D/← → steer · SPACE handbrake · R reset · F checkpoint · C camera · M mute · T chat · ESC menu
@@ -50,13 +50,12 @@ grant execute on function public.rename_player(text, text) to anon;
 The profile id is a hash of your key, so nobody can find your profile without your key. Lap times are sent by the browser, so treat the board as friendly rather than cheat-proof.
 
 ## Files
-`index.html`, `style.css`, `js/config.js` (online settings), `track.js`, `car.js` (physics), `cars.js` (car types and liveries), `net.js` (multiplayer), `audio.js`, `main.js` (game loop, time trial), `account.js` (accounts and leaderboards), `render.js`, `ui.js` (menus).
+`index.html`, `style.css`, `js/config.js` (online settings), `track.js`, `car.js` (physics), `cars.js` (car types and liveries), `net.js` (peer-to-peer multiplayer), `audio.js`, `main.js` (game loop, time trial), `account.js` (accounts and leaderboards), `render.js`, `ui.js` (menus).
 
 ## Deploying
 Open `deploy.html`, paste a GitHub token and press Deploy. Or push these files to the `main` branch and turn on Pages (Settings → Pages → Deploy from branch → main / root).
 
-## Online servers
+## Playing with friends
+Everyone opens the game link. One person presses **Host room** and gets a 5-letter code; friends type it and press **Join friend** (or pick it from **Open rooms** when Supabase is set up). The host picks the track, laps and mode, then starts the race.
 
-With Supabase configured, multiplayer rooms run through **Supabase Realtime** (broadcast + presence), so friends can join from any network, and open rooms appear in the **Servers** list on the Play tab. No extra tables are needed. In Supabase → Realtime → Settings, keep "Allow public access" on (channels are public). Without Supabase the game falls back to PeerJS peer-to-peer.
-
-Free-plan Realtime limits (about 200 concurrent connections, 100 messages/second per project) are enough for a few rooms of friends; cars send 10 updates a second online.
+Multiplayer is peer-to-peer (WebRTC via PeerJS): no game server needed. It works best when everyone is on the same Wi-Fi. Very strict networks (some school or work Wi-Fi) can block peer-to-peer; try a phone hotspot. If the host leaves, the room closes.

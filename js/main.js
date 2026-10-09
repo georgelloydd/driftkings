@@ -7,7 +7,7 @@ addEventListener('resize', resize); resize();
 const COLORS = ['#ff3b3b', '#ff8c1a', '#ffd60a', '#2ecc71', '#1ec8ff', '#3d6bff', '#a24dff', '#ff3fb4', '#f2f2f2', '#33363d'];
 const CFG = Object.assign({ name: 'Driver' + Math.floor(Math.random() * 900 + 100), color: COLORS[Math.floor(Math.random() * 8)], track: 0, mode: 'tt', laps: 3, body: 'drift', livery: 'stripes', accent: '#ffffff', accent2: '#111111', rim: '#c9ccd2', finish: 'gloss', num: '7' }, JSON.parse(localStorage.getItem('md_cfg') || '{}'));
 function saveCfg() { localStorage.setItem('md_cfg', JSON.stringify(CFG)); if (typeof ACCT !== 'undefined') ACCT.save(); }
-const DEF_KEYS = { up: 'w', down: 's', left: 'a', right: 'd', hb: ' ', reset: 'r', cp: 'f', cam: 'c', mute: 'm', chat: 't' };
+const DEF_KEYS = { up: 'w', down: 's', left: 'a', right: 'd', hb: ' ', reset: 'r', cp: 'f', cam: 'c', mute: 'm' };
 const DEF_GFX = { res: 'sharp', smoke: 1, skids: 1, weather: 1, vignette: 1, gates: 1, fps: 0 };
 CFG.keys = Object.assign({}, DEF_KEYS, CFG.keys || {}); CFG.gfx = Object.assign({}, DEF_GFX, CFG.gfx || {});
 const GFX_SCALES = { sharp: 2, balanced: 1.5, fast: 1, retro: 0.6 };
@@ -22,11 +22,11 @@ function rec(tr) { return JSON.parse(localStorage.getItem('md_rec_' + tr) || '{}
 function setRec(tr, r) { localStorage.setItem('md_rec_' + tr, JSON.stringify(r)); }
 function myId() { return G.mp ? NET.myId : 'me'; }
 
-function startSession(cfg, grid, mp) {
+function startSession(cfg, grid, mp, rid) {
   if (SESS.blocked) return;
   if (cfg.mode === 'tt') { cfg = Object.assign({}, cfg, { laps: 0 }); mp = false; grid = null; }
   G.tt = cfg.mode === 'tt' ? { laps: 0, restarts: 0, cps: 0, start: 0 } : null; G.dist = 0;
-  G.cfg = cfg; G.mp = mp; G.tr = buildTrack(cfg.track); G.rem.clear(); G.res.clear(); G.resList = null; G.final = false; G.firstFin = 0; G.smoke = [];
+  G.cfg = cfg; G.mp = mp; G.tr = buildTrack(cfg.track); G.rem.clear(); G.res.clear(); G.resList = null; G.final = false; G.firstFin = 0; G.smoke = []; G.flag = false; G.rid = rid || 0; for (const k in KEYS) KEYS[k] = false;
   grid = grid || [myId()];
   grid.forEach((id, slot) => {
     if (id === myId()) { G.me = newCar(slot, G.tr, id, CFG.name, CFG.color); Object.assign(G.me, carLook(CFG)); G.me.cpI = null; }
@@ -58,32 +58,32 @@ function progress(c, i, now) {
 function onLap(c, lt, now) {
   let pb = false; if (!TRACKS[G.cfg.track].test) { const r = rec(G.cfg.track); if (!r.lap || lt < r.lap) { r.lap = lt; pb = true; setRec(G.cfg.track, r); }
   if (ACCT.lap(G.cfg.track, lt, c.score + c.cur)) pb = true; } ACCT.stats.laps++; if (G.tt) G.tt.laps++;
-  pop((G.cfg.laps && c.lap >= G.cfg.laps ? 'FINAL LAP ' : 'LAP ') + fmt(lt) + (pb ? '  ★ PB' : ''), pb ? '#7dff9a' : '#fff');
-  if (G.cfg.laps && c.lap === G.cfg.laps - 1) setTimeout(() => pop('FINAL LAP!', '#ffe14d'), 700);
-  if (G.cfg.laps && c.lap >= G.cfg.laps) finishMe(now);
+  pop((G.cfg.laps && (c.lap >= G.cfg.laps || G.flag) ? 'FINAL LAP ' : 'LAP ') + fmt(lt) + (pb ? '  ★ PB' : ''), pb ? '#7dff9a' : '#fff');
+  if (G.cfg.laps && !G.flag && c.lap === G.cfg.laps - 1) setTimeout(() => pop('FINAL LAP!', '#ffe14d'), 700);
+  if (G.cfg.laps && (c.lap >= G.cfg.laps || G.flag)) finishMe(now);
 }
 function bankDrift(c) { if (c.cur > 0) { const p = Math.round(c.cur); c.score += p; c.cur = 0; c.combo = 1; c.comboT = 0; return p; } return 0; }
 function finishMe(now) {
-  const c = G.me; bankDrift(c); c.finished = Math.round(now - G.t0); ACCT.stats.laps -= Math.max(0, c.lap); ACCT.addSession({ race: true, laps: c.lap, drift: c.score, dist: G.dist * 0.0000694 });
+  const c = G.me; bankDrift(c); c.finished = Math.round(now - G.t0); G.flag = true; ACCT.stats.laps -= Math.max(0, c.lap); ACCT.addSession({ race: true, laps: c.lap, drift: c.score, dist: G.dist * 0.0000694 });
   const r = rec(G.cfg.track); if (!r.score || c.score > r.score) { r.score = c.score; setRec(G.cfg.track, r); }
   banner('FINISHED!'); setTimeout(() => { if (G.state === 'race') banner(''); }, 2000);
-  if (!G.mp) { G.resList = [{ id: 'me', name: c.name, color: c.color, time: c.finished, score: c.score }]; G.final = true; setTimeout(showBoard, 1500); }
-  else if (NET.host) hostFin('host', c.finished, c.score);
-  else { netSend({ t: 'fin', time: c.finished, score: c.score }); setTimeout(showBoard, 1500); }
+  if (!G.mp) { G.resList = [{ id: 'me', name: c.name, color: c.color, time: c.finished, score: c.score, laps: c.lap }]; G.final = true; setTimeout(showBoard, 1500); }
+  else if (NET.host) hostFin('host', c.finished, c.score, c.lap, G.rid);
+  else { netSend({ t: 'fin', time: c.finished, score: c.score, laps: c.lap, rid: G.rid }); setTimeout(showBoard, 1500); }
 }
-function hostFin(id, time, score) { G.res.set(id, { time, score }); if (!G.firstFin) G.firstFin = performance.now(); hostRes(false); }
+function hostFin(id, time, score, laps, rid) { if ((rid || 0) !== G.rid || G.res.has(id)) return; G.res.set(id, { time, score, laps: laps || 0 }); raiseFlag(); if (!G.firstFin) G.firstFin = performance.now(); hostRes(false); }
 function hostRes(force) {
   const ids = ['host', ...G.rem.keys()]; const final = force || ids.every(id => G.res.has(id));
-  const list = ids.map(id => { const p = id === 'host' ? { name: CFG.name, color: CFG.color } : G.rem.get(id).car; const r = G.res.get(id); return { id, name: p.name, color: p.color, time: r ? r.time : 0, score: r ? r.score : (id === 'host' ? G.me.score : G.rem.get(id).car.score) }; });
-  netSend({ t: 'res', list, final }); applyRes(list, final);
+  const list = ids.map(id => { const p = id === 'host' ? { name: CFG.name, color: CFG.color } : G.rem.get(id).car; const r = G.res.get(id); return { id, name: p.name, color: p.color, time: r ? r.time : 0, laps: r ? r.laps : 0, score: r ? r.score : (id === 'host' ? G.me.score : G.rem.get(id).car.score) }; });
+  netSend({ t: 'res', list, final, rid: G.rid }); applyRes(list, final);
 }
 function applyRes(list, final) { G.resList = list; G.final = final; if (final) NET.inRace = false; if (G.me.finished || final) showBoard(); }
 function showBoard() {
   if (!G.resList) return; const drift = G.cfg.mode === 'drift', L = [...G.resList];
-  L.sort((a, b) => drift ? b.score - a.score : (a.time || 1e12) - (b.time || 1e12));
+  L.sort((a, b) => drift ? b.score - a.score : (!!b.time - !!a.time) || ((b.laps || 0) - (a.laps || 0)) || (a.time || 1e12) - (b.time || 1e12)); const maxL = Math.max(0, ...L.map(p => p.time ? p.laps || 0 : 0));
   const r = rec(G.cfg.track);
   let h = `<h2>${G.final ? (drift ? '💨 DRIFT BATTLE RESULTS' : '🏁 RACE RESULTS') : 'RESULTS (waiting for others…)'}</h2><table>`;
-  L.forEach((p, i) => { h += `<tr><td>${['🥇', '🥈', '🥉'][i] || (i + 1)}</td><td><i style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${p.color}"></i> ${esc(p.name)}</td><td>${p.time ? fmt(p.time) : (G.final ? 'DNF' : 'racing…')}</td><td>${p.score.toLocaleString()} pts</td></tr>`; });
+  L.forEach((p, i) => { h += `<tr><td>${['🥇', '🥈', '🥉'][i] || (i + 1)}</td><td><i style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${p.color}"></i> ${esc(p.name)}</td><td>${p.time ? fmt(p.time) + (!drift && p.laps && p.laps < maxL ? ' <span class="dim">+' + (maxL - p.laps) + ' lap' + (maxL - p.laps > 1 ? 's' : '') + '</span>' : '') : (G.final ? 'DNF' : 'racing…')}</td><td>${p.score.toLocaleString()} pts</td></tr>`; });
   h += `</table><p style="opacity:.7;text-align:center">Your best on ${G.tr.name}: lap ${fmt(r.lap)} • drift ${(r.score || 0).toLocaleString()} pts</p>`;
   if (!G.mp) h += `<button class="btn green" onclick="startSession(G.cfg,null,false)">Race again</button><button class="btn blue" onclick="toMenu()">Menu</button>`;
   else if (NET.host) h += `<button class="btn green" onclick="hostToLobby()" ${G.final ? '' : 'disabled id="bWait"'}>Back to lobby</button>${G.final ? '' : '<button class="btn orange" onclick="hostRes(true)">End race now</button>'}`;
@@ -91,9 +91,9 @@ function showBoard() {
   $('board').innerHTML = h; $('board').classList.remove('hidden');
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-function pack(c) { return [c.x | 0, c.y | 0, +c.a.toFixed(3), c.vx | 0, c.vy | 0, +c.steer.toFixed(2), (c.drift ? 1 : 0) | (c.brake ? 2 : 0) | (c.hb ? 4 : 0), c.lap, c.prog, Math.round(c.score + c.cur), c.finished | 0]; }
+function pack(c) { return [c.x | 0, c.y | 0, +c.a.toFixed(3), c.vx | 0, c.vy | 0, +c.steer.toFixed(2), (c.drift ? 1 : 0) | (c.brake ? 2 : 0) | (c.hb ? 4 : 0), c.lap, c.prog, Math.round(c.score + c.cur), c.finished | 0, G.rid]; }
 function applyState(id, s) {
-  const r = G.rem.get(id); if (!r) return; r.raw = s; const c = r.car, now = performance.now();
+  const r = G.rem.get(id); if (!r || (s[11] || 0) !== G.rid) return; r.raw = s; if (s[10] && !r.car.finished) raiseFlag(r.car.name); const c = r.car, now = performance.now();
   if (!r.tgt) { c.x = s[0]; c.y = s[1]; c.a = s[2]; }
   r.tgt = { x: s[0], y: s[1], a: s[2], vx: s[3], vy: s[4], t: now }; c.steer = s[5]; c.drift = !!(s[6] & 1); c.brake = !!(s[6] & 2); c.hb = !!(s[6] & 4); c.lap = s[7]; c.prog = s[8]; c.score = s[9]; c.finished = s[10];
 }
@@ -120,9 +120,9 @@ function tick(ts, bg) {
   // remote cars
   for (const [id, r] of G.rem) { if (!r.tgt) continue; const c = r.car, age = Math.min(0.25, (now - r.tgt.t) / 1000), px = r.tgt.x + r.tgt.vx * age, py = r.tgt.y + r.tgt.vy * age, k = Math.min(1, dt * 14);
     if (Math.hypot(px - c.x, py - c.y) > 400) { c.x = px; c.y = py; } else { c.x += (px - c.x) * k; c.y += (py - c.y) * k; } c.a += angDiff(r.tgt.a, c.a) * k; c.vx = r.tgt.vx; c.vy = r.tgt.vy; c.speed = Math.hypot(c.vx, c.vy); c.slip = Math.abs(angDiff(Math.atan2(c.vy, c.vx), c.a));
-    const dx = me.x - c.x, dy = me.y - c.y, dd = Math.hypot(dx, dy); if (dd < 44 && dd > 0.01 && racing) { const nx = dx / dd, ny = dy / dd; me.x += nx * (44 - dd); me.y += ny * (44 - dd); const rv = (me.vx - c.vx) * nx + (me.vy - c.vy) * ny; if (rv < 0) { me.vx -= rv * 1.3 * nx; me.vy -= rv * 1.3 * ny; } if (me.cur > 200) { pop('CONTACT! DRIFT LOST', '#ff6060'); me.cur = 0; me.combo = 1; } } }
+    const dx = me.x - c.x, dy = me.y - c.y, dd = Math.hypot(dx, dy); if (dd < 44 && dd > 0.01 && racing && !c.finished && !me.finished) { const nx = dx / dd, ny = dy / dd; me.x += nx * (44 - dd); me.y += ny * (44 - dd); const rv = (me.vx - c.vx) * nx + (me.vy - c.vy) * ny; if (rv < 0) { me.vx -= rv * 1.3 * nx; me.vy -= rv * 1.3 * ny; } if (me.cur > 200) { pop('CONTACT! DRIFT LOST', '#ff6060'); me.cur = 0; me.combo = 1; } } }
   // network
-  if (G.mp && now - G.sendT > NET.rate) { G.sendT = now; const s = pack(me); if (NET.host) { const list = [['host', ...s]]; for (const [id, r] of G.rem) if (r.raw) list.push([id, ...r.raw]); netSend({ t: 'all', list }); if (G.firstFin && !G.final && now - G.firstFin > 30000) hostRes(true); } else netSend({ t: 'st', s }); }
+  if (G.mp && now - G.sendT > NET.rate) { G.sendT = now; const s = pack(me); if (NET.host) { const list = [['host', ...s]]; for (const [id, r] of G.rem) if (r.raw) list.push([id, ...r.raw]); netSend({ t: 'all', list }); if (G.firstFin && !G.final && now - G.firstFin > 120000) hostRes(true); } else netSend({ t: 'st', s }); }
   if (bg) { sndUpdate(me, true); return; }
   effects(dt); render(dt, now); hud(now); sndUpdate(me, true);
 }
@@ -161,3 +161,7 @@ function endTT() {
   $('board').innerHTML = `<h2>⏱ TIME TRIAL · ${esc(G.tr.name)}</h2><div class="sum"><div><small>LAPS</small><b>${T.laps}</b></div><div><small>BEST LAP</small><b>${fmt(c.best)}</b></div><div><small>TIME DRIVEN</small><b>${fmt(driven)}</b></div><div><small>DRIFT POINTS</small><b>${c.score.toLocaleString()}</b></div><div><small>DISTANCE</small><b>${km.toFixed(2)} km</b></div><div><small>RESTARTS</small><b>${T.restarts}</b></div></div><p style="opacity:.7;text-align:center">Your all-time best here: ${fmt(ab)}</p><button class="btn primary" onclick="startSession(G.cfg,null,false)">Keep driving</button><button class="btn dark" onclick="toMenu();setTab('lb')">Leaderboards</button><button class="btn dark" onclick="toMenu()">Menu</button>`;
   $('board').classList.remove('hidden');
 }
+
+// Chequered flag: the first finisher ends the race for everyone else at their next crossing of the line (so lapped cars finish too).
+function raiseFlag(name) { if (G.flag || !G.cfg || !G.cfg.laps || !G.me) return; G.flag = true; if (!G.me.finished) { pop('🏁 CHEQUERED FLAG' + (name ? ' · ' + name + ' WON' : ''), '#fff'); setTimeout(() => pop('FINISH THIS LAP TO END YOUR RACE', '#ffe14d'), 900); } }
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
