@@ -44,16 +44,11 @@ function startSession(cfg, grid, mp, rid) {
 function segOf(i) { const g = G.tr.gates; let s = 0; while (s < g.length && g[s].i <= i) s++; return s; }
 function progress(c, i, now) {
   const n = G.tr.n, f = i / n, lf = c.prog / n, K = G.tr.gates.length;
-  const seg = segOf(i); if (c.seg === undefined) c.seg = seg;
-  if (seg !== c.seg) {
-    if (seg === c.seg + 1 && c.lap >= 0) { c.ng = (c.ng || 0) + 1; if (!c.off) c.cpI = (G.tr.gates[seg - 1].i + 3) % n; if (c === G.me) { if (G.tt) G.tt.cps++; pop('CHECKPOINT ' + seg + ' / ' + K, '#ffd400'); splitAt(seg - 1, now - c.lapStart); } }
-    else if (seg === c.seg - 1) c.ng = Math.max(0, (c.ng || 0) - 1);
-    c.seg = seg;
-  }
+  if (c.seg === undefined) c.seg = 0;
   if (lf > 0.85 && f < 0.15) {
-    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.ng = 0; c.cpI = (i + 3) % n; }
-    else if ((c.ng || 0) >= K) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.ng = 0; c.cpI = (i + 3) % n; onLap(c, lt, now); }
-    else if (c === G.me && c.lap >= 0 && now - (c.missT || 0) > 3000) { c.missT = now; pop('LAP NOT COUNTED · MISSED CHECKPOINT ' + Math.min(K, (c.ng || 0) + 1), '#ff3b3b'); }
+    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.ng = 0; c.seg = 0; c.cpI = (i + 3) % n; }
+    else if ((c.ng || 0) >= K) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.ng = 0; c.seg = 0; c.cpI = (i + 3) % n; onLap(c, lt, now); }
+    else if (c.lap >= 0) { const miss = (c.ng || 0) + 1; if ((c.seg || 0) > 0 && c === G.me && now - (c.missT || 0) > 1500) { c.missT = now; pop('LAP NOT COUNTED · MISSED CHECKPOINT ' + Math.min(K, miss), '#ff3b3b'); } c.ng = 0; c.seg = 0; c.lapStart = now; c.cpI = (i + 3) % n; if (c === G.me) { G.curSplits = []; } }
   }
   c.prog = i;
 }
@@ -114,7 +109,7 @@ function tickInner(ts, bg) {
   if (G.state === 'countdown') { const left = G.cdEnd - now; banner(left > 0 ? (G.cfg.laps || G.tt ? String(Math.ceil(left / 1000)) : '') : ''); if (left <= 0) { G.state = 'race'; if (G.tt) G.tt.start = now; if (G.cfg.laps || G.tt) { banner('GO!'); setTimeout(() => { if ($('banner').textContent === 'GO!') banner(''); }, 900); } } }
   G.acc += dt; let inp = inputs();
   if (!racing) inp = { hb: true }; else if (me.finished) inp = { down: me.vF > 30 };
-  while (G.acc >= STEP) { G.acc -= STEP; const nr = stepCar(me, inp, STEP, G.tr); if (racing && !me.finished) progress(me, nr.i, performance.now()); }
+  while (G.acc >= STEP) { G.acc -= STEP; const ox = me.x, oy = me.y, nr = stepCar(me, inp, STEP, G.tr); if (racing && !me.finished) { const tn = performance.now(); gateCross(me, ox, oy, tn); progress(me, nr.i, tn); } }
   if (racing && !me.finished && me.lap >= 0) { if (G.recStart !== me.lapStart) { G.recStart = me.lapStart; G.recL = []; G.recK = -1; } const k = Math.floor((performance.now() - me.lapStart) / 100); if (k > G.recK) { G.recK = k; G.recL.push([Math.round(me.x), Math.round(me.y), Math.round(me.a * 100)]); } }
   // drift scoring
   if (racing && !me.finished) {
@@ -152,11 +147,11 @@ function effects(dt) {
 // ===== Endless time trial: R restarts the lap, F returns to the last checkpoint, ESC ends the session =====
 function ttRestart() {
   const c = G.me, s = gridSlot(G.tr, 0); c.x = s.x; c.y = s.y; c.a = s.a; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.lap = -1; c.cps = 0; c.lapStart = 0; c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0;
-  c.hint = s.i; c.prog = s.i; c.seg = segOf(s.i); c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; applySpawn(c); G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
+  c.hint = s.i; c.prog = s.i; c.seg = 0; c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; applySpawn(c); G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
 }
 function ttCheckpoint() {
   const c = G.me; if (c.cpI == null) return ttRestart();
-  const i = c.cpI, p = G.tr.pts[i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[i]; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.hint = i; c.prog = i; c.seg = segOf(i); c.ng = Math.max(0, c.seg);
+  const i = c.cpI, p = G.tr.pts[i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[i]; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.hint = i; c.prog = i; c.seg = c.seg || 0; c.ng = c.seg;
   c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0; c.rwL = c.rwR = null; pop('BACK TO CHECKPOINT', '#ffe14d');
 }
 function endTT() {
@@ -175,7 +170,7 @@ function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { co
 function applySpawn(c) {
   const sp = trackDef(G.cfg.track).spawn; if (!sp || !finPt(sp.p)) return false;
   const x = sp.p[0] * G.tr.W, y = sp.p[1] * G.tr.H, r = nearestFull(G.tr, x, y);
-  c.x = x; c.y = y; c.a = G.tr.dirs[r.i]; c.vx = c.vy = 0; c.hint = r.i; c.prog = r.i; c.seg = segOf(r.i); return true;
+  c.x = x; c.y = y; c.a = G.tr.dirs[r.i]; c.vx = c.vy = 0; c.hint = r.i; c.prog = r.i; c.seg = 0; c.ng = 0; return true;
 }
 // ---------- ghosts ----------
 function setGhost(rep, pick) {
@@ -230,4 +225,17 @@ function interpRemote(r, c, now) {
   }
   while (B.length > 2 && B[1].t < rt - 500) B.shift();
   c.x = x; c.y = y; c.a = a; c.vx = vx; c.vy = vy; c.speed = Math.hypot(vx, vy); c.slip = Math.abs(angDiff(Math.atan2(vy, vx), a));
+}
+
+// Forced checkpoints: the NEXT gate only counts if the car actually drives through its line
+// (between the track edges, going the right way). Cutting the track or going round a gate on the run-off doesn't count.
+function gateCross(c, ox, oy, now) {
+  if (c.lap < 0) return; const g = G.tr.gates, K = g.length, k = c.seg || 0; if (k >= K) return;
+  const q = g[k], p = G.tr.pts[q.i], a = G.tr.dirs[q.i], fx = Math.cos(a), fy = Math.sin(a);
+  const s0 = (ox - p[0]) * fx + (oy - p[1]) * fy, s1 = (c.x - p[0]) * fx + (c.y - p[1]) * fy;
+  if (!(s0 < 0 && s1 >= 0)) return;
+  const t = s0 / (s0 - s1), lx = ox + (c.x - ox) * t - p[0], ly = oy + (c.y - oy) * t - p[1], lat = -lx * fy + ly * fx;
+  if (Math.abs(lat) > G.tr.w / 2 + 8) return;
+  c.seg = k + 1; c.ng = c.seg; c.cpI = (q.i + 3) % G.tr.n;
+  if (c === G.me) { if (G.tt) G.tt.cps++; pop('CHECKPOINT ' + c.seg + ' / ' + K, '#ffd400'); splitAt(k, now - c.lapStart); }
 }

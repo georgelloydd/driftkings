@@ -30,7 +30,7 @@ function render(dt) {
   if (CFG.gfx.fps) { G.fps = (G.fps || 60) * 0.94 + (1 / Math.max(dt, 1e-3)) * 0.06; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.font = '700 12px monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(Math.round(G.fps) + ' FPS', 14, VH - 14); }
 }
 function drawGates(tr) {
-  const me = G.me, live = me && me.lap >= 0, nx = me ? (me.seg + 1) % 8 : -1, t = performance.now() / 1000, hw = tr.w / 2;
+  const me = G.me, live = me && me.lap >= 0, nx = me ? (me.seg || 0) + 1 : -1, t = performance.now() / 1000, hw = tr.w / 2;
   ctx.save(); ctx.lineCap = 'round'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px Segoe UI, system-ui, sans-serif';
   for (const g of tr.gates) {
     const p = tr.pts[g.i], a = tr.dirs[g.i], px = -Math.sin(a), py = Math.cos(a), next = live && g.s === nx, done = live && g.s <= me.seg;
