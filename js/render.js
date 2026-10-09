@@ -6,10 +6,15 @@ function drawWorld(tr, cam, cars, rot) {
   ctx.save(); ctx.translate(VW / 2, VH / 2); if (rot) ctx.rotate(cam.a); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y);
   const hd = Math.hypot(VW, VH) / 2 / cam.z + 20, sx = Math.max(0, cam.x - hd), sy = Math.max(0, cam.y - hd), sw = Math.min(tr.W || WORLD_W, cam.x + hd) - sx, sh = Math.min(tr.H || WORLD_H, cam.y + hd) - sy, bs = tr.bs || 1;
   if (sw > 0 && sh > 0) { ctx.drawImage(tr.canvas, sx * bs, sy * bs, sw * bs, sh * bs, sx, sy, sw, sh); if (bs < 0.99) drawRoadLive(ctx, tr, sx, sy, sx + sw, sy + sh); if (night) { ctx.fillStyle = 'rgba(4,6,22,.55)'; ctx.fillRect(sx, sy, sw, sh); } }
+  const inGame = G.state !== 'menu' && G.state !== 'lobby', tT = inGame ? (G.tunT || 0) : 0;
   drawWalls(ctx, tr);
+  if (tT > 0.01 && sw > 0) { ctx.fillStyle = `rgba(2,3,12,${0.58 * tT})`; ctx.fillRect(sx, sy, sw, sh); }
+  drawTunnelFloor(ctx, tr);
   if (CFG.gfx.gates && G.state !== 'menu' && G.state !== 'lobby') drawGates(tr);
   for (const p of G.smoke) { const a = (1 - p.life / p.max) * 0.32; ctx.fillStyle = night ? `rgba(170,180,230,${a})` : `rgba(238,238,242,${a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill(); }
-  for (const c of cars) { if (c.finished && (G.state === 'race' || G.state === 'countdown' || G.state === 'over')) { ctx.globalAlpha = 0.35; drawCar(ctx, c, night); ctx.globalAlpha = 1; } else drawCar(ctx, c, night); }
+  const dc = c => { if (c.finished && (G.state === 'race' || G.state === 'countdown' || G.state === 'over')) { ctx.globalAlpha = 0.35; drawCar(ctx, c, night); ctx.globalAlpha = 1; } else drawCar(ctx, c, night); };
+  const hi = []; for (const c of cars) { if (carLayer(tr, c) === 1) hi.push(c); else dc(c); }
+  drawTunnelRoof(ctx, tr, 0.9 - 0.75 * tT); drawBridges(ctx, tr); hi.forEach(dc);
   ctx.restore();
   ctx.font = '700 13px Segoe UI, system-ui, sans-serif'; ctx.textAlign = 'center';
   for (const c of cars) { if (!c.name || c === G.me) continue; const [x, y] = worldToScreen(cam, c.x, c.y); const w = ctx.measureText(c.name).width + 14; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 52, w, 20, 8); ctx.fill(); ctx.fillStyle = c.color; ctx.fillRect(x - w / 2 + 4, y - 35, w - 8, 2); ctx.fillStyle = '#fff'; ctx.fillText(c.name, x, y - 37); }
@@ -17,10 +22,10 @@ function drawWorld(tr, cam, cars, rot) {
   if (CFG.gfx.vignette) { const vg = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.hypot(VW, VH) * 0.6); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.4)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, VW, VH); }
 }
 function render(dt) {
-  const me = G.me, cam = G.cam, base = Math.min(VW, VH) / 820, zt = base * (1.08 - Math.min(1, me.speed / CAR.MAXS) * 0.32), k = Math.min(1, dt * 6);
+  const me = G.me, cam = G.cam, base = Math.min(VW, VH) / 820, zt = base * (1.08 - Math.min(1, me.speed / CAR.MAXS) * 0.32) * (1 + 0.4 * (G.tunT = (G.tunT || 0) + ((me.layer === -1 ? 1 : 0) - (G.tunT || 0)) * Math.min(1, dt * 3))), k = Math.min(1, dt * 6);
   cam.z += (zt - cam.z) * Math.min(1, dt * 2); cam.x += (me.x + me.vx * 0.3 - cam.x) * k; cam.y += (me.y + me.vy * 0.3 - cam.y) * k;
   if (G.rot) cam.a += angDiff(-me.a - Math.PI / 2, cam.a) * Math.min(1, dt * 4);
-  drawWorld(G.tr, cam, [...[...G.rem.values()].map(r => r.car), me], G.rot);
+  drawWorld(G.tr, cam, [...ghostCars(), ...[...G.rem.values()].map(r => r.car), me], G.rot);
   drawMini();
   if (CFG.gfx.fps) { G.fps = (G.fps || 60) * 0.94 + (1 / Math.max(dt, 1e-3)) * 0.06; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.font = '700 12px monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(Math.round(G.fps) + ' FPS', 14, VH - 14); }
 }

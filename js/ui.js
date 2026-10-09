@@ -36,7 +36,7 @@ async function loadLB() {
   $('lbHead').innerHTML = res.live ? '<span class="live"></span> Live · global · fastest lap per driver' : (res.err ? '⚠ Leaderboard server unreachable · showing this device' : 'This device · fastest lap per account') + ` · ${TRACKS[LBT].name}`;
   const best = res.rows[0] ? res.rows[0].lap : 0;
   clearTimeout(LBPOLL); if (res.rows.some(x => x.pending)) LBPOLL = setTimeout(() => { if (TAB === 'lb' && G.state === 'menu') { LB.flush(); loadLB(); } }, 3000);
-  $('lbTable').innerHTML = '<tr><th>POS</th><th>DRIVER</th><th>CAR</th><th>BEST LAP</th><th>GAP</th><th>SET</th></tr>' + (res.rows.length ? res.rows.map((x, i) => `<tr class="${x.pid === ACCT.pub ? 'me' : ''}"><td class="pos">${i + 1}</td><td><i style="background:${esc(x.color || '#888')}"></i>${esc(x.name)}${x.pending ? ' <small style="color:#ff9a2a">· uploading</small>' : ''}${x.failed ? ` <small style="color:#ff5a5a" title="${esc(x.failed)}">· not uploaded (hover for why)</small>` : ''}</td><td>${esc(carType(x.body).name)}</td><td>${fmt(x.lap)}</td><td>${i ? '+' + ((x.lap - best) / 1000).toFixed(3) : '—'}</td><td>${x.at ? new Date(x.at).toLocaleDateString() : ''}</td></tr>`).join('') : '<tr><td colspan="6" style="color:#8b8b93;padding:22px">No laps yet. Set one in Time trial.</td></tr>');
+  $('lbTable').innerHTML = '<tr><th>POS</th><th>DRIVER</th><th>CAR</th><th>BEST LAP</th><th>GAP</th><th>SET</th><th></th></tr>' + (res.rows.length ? res.rows.map((x, i) => `<tr class="${x.pid === ACCT.pub ? 'me' : ''}"><td class="pos">${i + 1}</td><td><i style="background:${esc(x.color || '#888')}"></i>${esc(x.name)}${x.pending ? ' <small style="color:#ff9a2a">· uploading</small>' : ''}${x.failed ? ` <small style="color:#ff5a5a" title="${esc(x.failed)}">· not uploaded (hover for why)</small>` : ''}</td><td>${esc(carType(x.body).name)}</td><td>${fmt(x.lap)}</td><td>${i ? '+' + ((x.lap - best) / 1000).toFixed(3) : '—'}</td><td>${x.at ? new Date(x.at).toLocaleDateString() : ''}</td><td><button class="btn dark sm" data-ghost="${i}" title="Race this lap's ghost in Time trial">Ghost</button></td></tr>`).join('') : '<tr><td colspan="7" style="color:#8b8b93;padding:22px">No laps yet. Set one in Time trial.</td></tr>'); LBROWS = res.rows; $('lbTable').querySelectorAll('[data-ghost]').forEach(b => b.onclick = () => raceGhost(LBT, LBROWS[+b.dataset.ghost], b));
 }
 function refreshAcct() {
   if (!ACCT.key) return; $('regBox').classList.toggle('hidden', ACCT.reg); if (!ACCT.reg && document.activeElement !== $('regName') && !$('regName').value) $('regName').value = /^Driver\d*$/.test(CFG.name) ? '' : CFG.name; if (document.activeElement !== $('acctName')) $('acctName').value = CFG.name; $('keyOut').value = KEYSHOWN ? ACCT.key : ACCT.key.slice(0, 3) + '••••-••••-••••'; $('bReveal').textContent = KEYSHOWN ? 'Hide' : 'Show';
@@ -203,4 +203,15 @@ async function loadTracks() {
   if (new URLSearchParams(location.search).has('test')) { try { const hp = new URLSearchParams(location.hash.slice(1)).get('track'); const d = hp ? JSON.parse(decodeURIComponent(escape(atob(hp)))) : JSON.parse(localStorage.getItem('md_test_track') || 'null'); if (d && Array.isArray(d.pts) && d.pts.length >= 4) { d.test = true; d.name = (d.name || 'Track') + ' (test)'; TRACKS.push(d); TEST_IDX = TRACKS.length - 1; } } catch (e) { } }
   if (!(CFG.track >= 0 && CFG.track < TRACKS.length) || ((TRACKS[CFG.track].test || TRACKS[CFG.track].hidden) && CFG.track !== TEST_IDX)) CFG.track = Math.max(0, TRACKS.findIndex(t => !t.hidden && !t.test));
   G.attract = null;
+}
+
+// ---------- race a leaderboard ghost in time trial ----------
+let LBROWS = [];
+async function raceGhost(tr, row, btn) {
+  if (G.state !== 'menu' || !row) return; let rep = null; if (btn) btn.textContent = '…';
+  if (CLOUD) { try { const r = await sb('GET', `laps?track=eq.${tr}&pid=eq.${encodeURIComponent(row.pid)}&select=replay,lap_ms`); if (r && r[0] && r[0].lap_ms === row.lap) rep = r[0].replay; } catch (e) { } }
+  if (!decRep(rep) && row.pid === ACCT.pub) rep = localStorage.getItem('md_rep_' + tr);
+  if (btn) btn.textContent = 'Ghost';
+  if (!decRep(rep)) return alert('There is no ghost for this lap yet. Ghosts are saved with new personal bests from now on.');
+  G.ghostPick = { rep, name: row.name, color: row.color, body: row.body }; CFG.track = tr; G.plist = []; startSession({ track: tr, laps: 0, mode: 'tt' }, null, false);
 }

@@ -29,9 +29,11 @@ function startSession(cfg, grid, mp, rid) {
   G.cfg = cfg; G.mp = mp; G.tr = buildTrack(cfg.track); G.rem.clear(); G.res.clear(); G.resList = null; G.final = false; G.firstFin = 0; G.smoke = []; G.flag = false; G.rid = rid || 0; for (const k in KEYS) KEYS[k] = false;
   grid = grid || [myId()];
   grid.forEach((id, slot) => {
-    if (id === myId()) { G.me = newCar(slot, G.tr, id, CFG.name, CFG.color); Object.assign(G.me, carLook(CFG)); G.me.cpI = null; }
+    if (id === myId()) { G.me = newCar(slot, G.tr, id, CFG.name, CFG.color); Object.assign(G.me, carLook(CFG)); G.me.cpI = null; G.me.tw = TWEAKS; }
     else { const p = G.plist.find(q => q.id === id) || { name: 'Driver', color: '#888' }; const rc = newCar(slot, G.tr, id, p.name, p.color); Object.assign(rc, carLook(p)); rc.color = carLook(p).color; G.rem.set(id, { car: rc, tgt: null, raw: null }); }
   });
+  G.ghost = null; G.ghostCar = null; G.curSplits = []; G.splitStart = null; G.recL = null; G.recStart = null;
+  if (G.tt) { applySpawn(G.me); const pick = G.ghostPick; G.ghostPick = null; setGhost(pick ? pick.rep : localStorage.getItem('md_rep_' + cfg.track), pick); }
   G.cam.x = G.me.x; G.cam.y = G.me.y; G.cam.a = -G.me.a - Math.PI / 2;
   for (const s of ['menu', 'lobby', 'board']) $(s).classList.add('hidden');
   for (const s of ['hud', 'speedo', 'mini']) $(s).classList.remove('hidden');
@@ -44,7 +46,7 @@ function progress(c, i, now) {
   const n = G.tr.n, f = i / n, lf = c.prog / n, K = G.tr.gates.length;
   const seg = segOf(i); if (c.seg === undefined) c.seg = seg;
   if (seg !== c.seg) {
-    if (seg === c.seg + 1 && c.lap >= 0) { c.ng = (c.ng || 0) + 1; if (!c.off) c.cpI = (G.tr.gates[seg - 1].i + 3) % n; if (c === G.me) { if (G.tt) G.tt.cps++; pop('CHECKPOINT ' + seg + ' / ' + K, '#ffd400'); } }
+    if (seg === c.seg + 1 && c.lap >= 0) { c.ng = (c.ng || 0) + 1; if (!c.off) c.cpI = (G.tr.gates[seg - 1].i + 3) % n; if (c === G.me) { if (G.tt) G.tt.cps++; pop('CHECKPOINT ' + seg + ' / ' + K, '#ffd400'); splitAt(seg - 1, now - c.lapStart); } }
     else if (seg === c.seg - 1) c.ng = Math.max(0, (c.ng || 0) - 1);
     c.seg = seg;
   }
@@ -56,8 +58,10 @@ function progress(c, i, now) {
   c.prog = i;
 }
 function onLap(c, lt, now) {
+  const rep = c === G.me ? encRep(G.recL) : null, sr = splitRef(); if (sr && sr.lap) showDelta(lt - sr.lap);
   let pb = false; if (!TRACKS[G.cfg.track].test) { const r = rec(G.cfg.track); if (!r.lap || lt < r.lap) { r.lap = lt; pb = true; setRec(G.cfg.track, r); }
-  if (ACCT.lap(G.cfg.track, lt, c.score + c.cur)) pb = true; } ACCT.stats.laps++; if (G.tt) G.tt.laps++;
+  if (ACCT.lap(G.cfg.track, lt, c.score + c.cur, rep)) pb = true; }
+  lapExtras(lt, rep, pb, sr); ACCT.stats.laps++; if (G.tt) G.tt.laps++;
   pop((G.cfg.laps && (c.lap >= G.cfg.laps || G.flag) ? 'FINAL LAP ' : 'LAP ') + fmt(lt) + (pb ? '  ★ PB' : ''), pb ? '#7dff9a' : '#fff');
   if (G.cfg.laps && !G.flag && c.lap === G.cfg.laps - 1) setTimeout(() => pop('FINAL LAP!', '#ffe14d'), 700);
   if (G.cfg.laps && (c.lap >= G.cfg.laps || G.flag)) finishMe(now);
@@ -111,6 +115,7 @@ function tickInner(ts, bg) {
   G.acc += dt; let inp = inputs();
   if (!racing) inp = { hb: true }; else if (me.finished) inp = { down: me.vF > 30 };
   while (G.acc >= STEP) { G.acc -= STEP; const nr = stepCar(me, inp, STEP, G.tr); if (racing && !me.finished) progress(me, nr.i, performance.now()); }
+  if (racing && !me.finished && me.lap >= 0) { if (G.recStart !== me.lapStart) { G.recStart = me.lapStart; G.recL = []; G.recK = -1; } const k = Math.floor((performance.now() - me.lapStart) / 100); if (k > G.recK) { G.recK = k; G.recL.push([Math.round(me.x), Math.round(me.y), Math.round(me.a * 100)]); } }
   // drift scoring
   if (racing && !me.finished) {
     G.dist += me.speed * dt;
@@ -148,7 +153,7 @@ function effects(dt) {
 // ===== Endless time trial: R restarts the lap, F returns to the last checkpoint, ESC ends the session =====
 function ttRestart() {
   const c = G.me, s = gridSlot(G.tr, 0); c.x = s.x; c.y = s.y; c.a = s.a; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.lap = -1; c.cps = 0; c.lapStart = 0; c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0;
-  c.hint = s.i; c.prog = s.i; c.seg = segOf(s.i); c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
+  c.hint = s.i; c.prog = s.i; c.seg = segOf(s.i); c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; applySpawn(c); G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
 }
 function ttCheckpoint() {
   const c = G.me; if (c.cpI == null) return ttRestart();
@@ -166,3 +171,35 @@ function endTT() {
 // Chequered flag: the first finisher ends the race for everyone else at their next crossing of the line (so lapped cars finish too).
 function raiseFlag(name) { if (G.flag || !G.cfg || !G.cfg.laps || !G.me) return; G.flag = true; if (!G.me.finished) { pop('🏁 CHEQUERED FLAG' + (name ? ' · ' + name + ' WON' : ''), '#fff'); setTimeout(() => pop('FINISH THIS LAP TO END YOUR RACE', '#ffe14d'), 900); } }
 function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// ---------- time trial spawn point (set per track in the dev track builder) ----------
+function applySpawn(c) {
+  const sp = trackDef(G.cfg.track).spawn; if (!sp || !finPt(sp.p)) return false;
+  const x = sp.p[0] * G.tr.W, y = sp.p[1] * G.tr.H, r = nearestFull(G.tr, x, y);
+  c.x = x; c.y = y; c.a = G.tr.dirs[r.i]; c.vx = c.vy = 0; c.hint = r.i; c.prog = r.i; c.seg = segOf(r.i); return true;
+}
+// ---------- ghosts ----------
+function setGhost(rep, pick) {
+  const L = decRep(rep); G.ghost = L; G.ghostCar = null; if (!L) return;
+  const gc = newCar(0, G.tr, 'ghost', pick ? pick.name + ' (ghost)' : 'PB ghost', (pick && pick.color) || CFG.color);
+  Object.assign(gc, carLook(pick ? { name: pick.name, color: pick.color || '#888888', body: pick.body } : CFG)); gc.finished = 1; gc.own = !pick; G.ghostCar = gc;
+}
+function ghostCars() {
+  const gc = G.ghostCar, L = G.ghost, me = G.me; if (!gc || !L || G.state !== 'race' || !me || me.lap < 0 || me.finished) return [];
+  const k = (performance.now() - me.lapStart) / 100, i = Math.floor(k); if (i < 0 || i >= L.length - 1) return [];
+  const f = k - i, A = L[i], B = L[i + 1]; gc.x = A[0] + (B[0] - A[0]) * f; gc.y = A[1] + (B[1] - A[1]) * f; gc.a = A[2] + (B[2] - A[2]) * f; gc.vx = (B[0] - A[0]) * 10; gc.vy = (B[1] - A[1]) * 10; gc.speed = Math.hypot(gc.vx, gc.vy); return [gc];
+}
+// ---------- checkpoint deltas against your best lap ----------
+function splitRef() { try { const r = JSON.parse(localStorage.getItem('md_split_' + G.cfg.track) || 'null'); return r && r.n === G.tr.n && r.k === G.tr.gates.length && Array.isArray(r.s) ? r : null; } catch (e) { return null; } }
+function splitAt(j, t) { if (G.splitStart !== G.me.lapStart) { G.splitStart = G.me.lapStart; G.curSplits = []; } G.curSplits[j] = t; const r = splitRef(); if (r && r.s[j]) showDelta(t - r.s[j]); }
+function showDelta(d) {
+  let el = $('hDelta'); if (!el) { el = document.createElement('div'); el.id = 'hDelta'; el.style.cssText = 'position:fixed;top:78px;left:50%;transform:translateX(-50%);font-size:32px;font-weight:900;font-style:italic;font-variant-numeric:tabular-nums;text-shadow:0 3px 10px rgba(0,0,0,.85);pointer-events:none;z-index:30;transition:opacity .4s;opacity:0'; document.body.appendChild(el); }
+  const r = Math.round(d); el.textContent = r === 0 ? '=0.000' : (r > 0 ? '+' : '-') + (Math.abs(r) / 1000).toFixed(3);
+  el.style.color = r === 0 ? '#ffd400' : r > 0 ? '#ff3b3b' : '#3bff6b'; el.style.opacity = 1; clearTimeout(showDelta.t); showDelta.t = setTimeout(() => { el.style.opacity = 0; }, 2600);
+}
+function lapExtras(lt, rep, pb, sr) {
+  const K = G.tr.gates.length, S = G.curSplits || [];
+  if (S.length === K && S.every(x => x > 0) && (!sr || lt < sr.lap)) { try { localStorage.setItem('md_split_' + G.cfg.track, JSON.stringify({ lap: Math.round(lt), s: S.map(Math.round), n: G.tr.n, k: K })); } catch (e) { } }
+  G.curSplits = []; G.splitStart = G.me.lapStart;
+  if (pb && rep) { try { localStorage.setItem('md_rep_' + G.cfg.track, rep); } catch (e) { } if (G.tt && (!G.ghostCar || G.ghostCar.own)) setGhost(rep, null); }
+}

@@ -15,16 +15,16 @@ const ACCT = {
   async load() {
     let k = localStorage.getItem('md_key');
     if (!k || !validKey(k)) { k = newKey(); localStorage.setItem('md_key', k); }
-    await this.use(k, false);
+    await this.use(k);
   },
   async use(k, fetchCloud) {
     this.key = k; localStorage.setItem('md_key', k); this.pub = (await sha('pub:' + k)).slice(0, 24); this.priv = await sha('priv:' + k);
     const local = JSON.parse(localStorage.getItem('md_acct_' + k) || 'null');
     let data = local;
-    if (CLOUD && fetchCloud !== false) { try { const r = await sb('GET', 'profiles?id=eq.' + this.priv + '&select=data'); if (r && r[0]) data = r[0].data; } catch (e) { } }
+    if (CLOUD && fetchCloud !== false) { try { const r = await Promise.race([sb('GET', 'profiles?id=eq.' + this.priv + '&select=data'), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 4000))]); if (r && r[0]) data = r[0].data; } catch (e) { } }
     if (data) { this.stats = Object.assign(blankStats(), data.stats || {}); if (data.cfg) { Object.assign(CFG, data.cfg); } }
     else this.stats = blankStats();
-    this.reg = !!(data && data.reg);
+    this.reg = !!(data && data.reg); loadTweaks();
     this.save(true); if (CLOUD && this.reg) { this.save(); syncBests(false); this.register(); LB.flush(); }
     return !!data;
   },
@@ -60,7 +60,7 @@ const ACCT = {
     try { await sb('POST', 'rpc/rename_player', { p_key: this.key, p_name: name }); this.register(); return 'Name saved and updated on the online leaderboards.'; }
     catch (e) { return /404|PGRST202|rename_player/.test(e.message) ? 'Name saved. Old online leaderboard times keep the old name until you run the rename_player SQL from the README.' : 'Name saved here, but the online update failed: ' + e.message; }
   },
-  lap(tr, ms, score) { const b = this.stats.best[tr] = this.stats.best[tr] || {}; let pb = false; if (!b.lap || ms < b.lap) { b.lap = ms; pb = true; LB.submit(tr, ms, score); } this.save(); return pb; },
+  lap(tr, ms, score, rep) { const b = this.stats.best[tr] = this.stats.best[tr] || {}; let pb = false; if (!b.lap || ms < b.lap) { b.lap = ms; pb = true; LB.submit(tr, ms, score, rep); } this.save(); return pb; },
 };
 
 let ONLINE_ERR = '';
@@ -86,6 +86,7 @@ async function testOnline() {
 async function submitLap(tr, e) {
   const r = { p_track: +tr, p_pid: e.pid || ACCT.pub, p_name: CFG.name, p_color: CFG.color, p_body: CFG.body, p_lap_ms: Math.round(e.lap), p_score: Math.round(e.score || 0) };
   const perm = er => { const m = /\((\d{3})\)/.exec(er.message), s = m ? +m[1] : 0; if (s >= 400 && s < 500 && s !== 408 && s !== 429) er.perm = true; return er; };
+  if (e.rep) { r.p_replay = e.rep; try { await sb('POST', 'rpc/submit_lap', r); return; } catch (er) { if (!/\(404\)|PGRST202/.test(er.message)) throw perm(er); delete r.p_replay; } }
   try { await sb('POST', 'rpc/submit_lap', r); }
   catch (er) { if (!/\(404\)|PGRST202/.test(er.message)) throw perm(er);
     // old database without submit_lap: plain insert (a duplicate means the server already has a time for us)
@@ -101,11 +102,11 @@ async function syncBests(force) {
 }
 const LB = {
   localGet(tr) { return JSON.parse(localStorage.getItem('md_lb_' + tr) || '[]'); },
-  submit(tr, ms, score) {
+  submit(tr, ms, score, rep) {
     const e = { pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap: Math.round(ms), score: Math.round(score || 0), at: Date.now() };
     let L = this.localGet(tr).filter(x => x.pid !== e.pid || x.lap < e.lap); if (!L.some(x => x.pid === e.pid)) L.push(e);
     L.sort((a, b) => a.lap - b.lap); localStorage.setItem('md_lb_' + tr, JSON.stringify(L.slice(0, 50)));
-    if (CLOUD && ACCT.reg) this.queue(tr, e); // guests: this device only, never sent to Supabase
+    if (CLOUD && ACCT.reg) this.queue(tr, rep ? Object.assign({ rep }, e) : e); // guests: this device only, never sent to Supabase
   },
   rej() { return JSON.parse(localStorage.getItem('md_rej_' + ACCT.key) || '{}'); },
   pend() { return JSON.parse(localStorage.getItem('md_pending_' + ACCT.key) || '{}'); },
@@ -140,3 +141,12 @@ const LB = {
     } catch (e) { return { live: false, err: true, rows: this.localGet(tr).slice(0, 10) }; }
   },
 };
+
+// admin troll tweaks for this player (Troll tab on the dev site). Checked every 15 s so changes apply mid-race.
+async function loadTweaks() {
+  if (!CLOUD || !ACCT.pub) return;
+  try { const r = await sb('GET', 'player_tweaks?pid=eq.' + ACCT.pub + '&select=data'), d = (r && r[0] && r[0].data) || {}, t = Object.assign({}, TW_DEF);
+    for (const k in TW_DEF) { const v = d[k]; if (typeof v === 'number' && isFinite(v)) t[k] = k === 'inv' ? (v ? 1 : 0) : Math.max(k === 'maxs' || k === 'engine' ? 0.05 : 0, Math.min(10, v)); }
+    TWEAKS = t; if (G.me) G.me.tw = TWEAKS; } catch (e) { }
+}
+setInterval(loadTweaks, 15000);
