@@ -60,7 +60,9 @@ const ACCT = {
     try { await sb('POST', 'rpc/rename_player', { p_key: this.key, p_name: name }); this.register(); return 'Name saved and updated on the online leaderboards.'; }
     catch (e) { return /404|PGRST202|rename_player/.test(e.message) ? 'Name saved. Old online leaderboard times keep the old name until you run the rename_player SQL from the README.' : 'Name saved here, but the online update failed: ' + e.message; }
   },
-  lap(tr, ms, score, rep) { const b = this.stats.best[tr] = this.stats.best[tr] || {}; let pb = false; if (!b.lap || ms < b.lap) { b.lap = ms; pb = true; LB.submit(tr, ms, score, rep); } this.save(); return pb; },
+  lap(tr, ms, score, rep) { const b = this.stats.best[tr] = this.stats.best[tr] || {}; let pb = false; if (!b.lap || ms < b.lap) { b.lap = ms; pb = true; }
+    let sy = null; try { sy = JSON.parse(localStorage.getItem('md_synced_' + this.key) || '{}')[tr]; } catch (e) { }
+    if (pb || (this.reg && (!sy || ms < sy))) LB.submit(tr, ms, score, rep); this.save(); return pb; },
 };
 
 let ONLINE_ERR = '';

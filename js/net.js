@@ -22,7 +22,7 @@ function netHost(me, cb) {
   peer.on('disconnected', () => { try { if (NET.on && NET.peer === peer) peer.reconnect(); } catch (e) { } });
   peer.on('connection', c => {
     c.on('data', d => hostData(c, d));
-    c.on('close', () => { if (!NET.host || NET.peer !== peer) return; NET.conns.delete(c.peer); if (NET.players.delete(c.peer)) { emit('left', c.peer); netLobby(); } });
+    c.on('close', () => { if (!NET.host || NET.peer !== peer) return; NET.conns.delete(c.peer); if (NET.players.delete(c.peer)) { emit('left', c.peer); if (typeof G === 'undefined' || G.state === 'lobby' || G.state === 'menu') netLobby(); else netSend({ t: 'gone', id: c.peer }); } });
   });
 }
 function netJoin(code, me, cb) {
