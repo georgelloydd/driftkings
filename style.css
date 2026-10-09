@@ -105,3 +105,21 @@ input:focus{border-color:var(--red)}
 .srv em{color:#e10600;font-weight:800;font-style:italic;font-size:12px;letter-spacing:.08em}
 .srv .btn{padding:6px 14px}
 .dim{color:#777;font-weight:600;letter-spacing:0;text-transform:none}
+
+#tab-join .servers{max-height:none}
+#codeIn{font-size:22px;letter-spacing:.3em;text-transform:uppercase;max-width:260px}
+#pubRow{margin-top:14px}
+
+.mpGrid{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:18px;align-items:start;margin:6px 0 18px}
+.mpGrid.set{grid-template-columns:1fr 1fr}
+.mpc{background:rgba(10,10,12,.78);border:1px solid #2a2a30;border-left:3px solid #ff2a2a;padding:14px 18px 16px}
+.mpc h3{margin:0 0 8px;font-style:italic;font-weight:900;font-size:20px;text-transform:uppercase;letter-spacing:.04em;color:#fff}
+.mpc #tracks{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.chk.dim{opacity:.5}
+.binds{display:flex;flex-direction:column;margin:6px 0 12px}
+.bind{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #222}
+.bind>span{font-size:13px;color:#ccc}
+.bind .row{margin:0;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.kb{min-width:120px;font-family:ui-monospace,monospace;font-weight:800}
+.kb.wait{background:#ff2a2a!important;color:#fff!important;border-color:#ff2a2a!important}
+@media (max-width:900px){.mpGrid,.mpGrid.set{grid-template-columns:1fr}}

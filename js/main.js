@@ -2,14 +2,20 @@
 function $(i) { return document.getElementById(i); }
 const cv = $('cv'), ctx = cv.getContext('2d');
 let VW = 0, VH = 0, DPR = 1;
-function resize() { DPR = Math.min(2, devicePixelRatio || 1); VW = innerWidth; VH = innerHeight; cv.width = VW * DPR; cv.height = VH * DPR; }
+function resize() { DPR = Math.min(window.GFX_SCALE || 2, devicePixelRatio || 1); VW = innerWidth; VH = innerHeight; cv.width = VW * DPR; cv.height = VH * DPR; }
 addEventListener('resize', resize); resize();
 const COLORS = ['#ff3b3b', '#ff8c1a', '#ffd60a', '#2ecc71', '#1ec8ff', '#3d6bff', '#a24dff', '#ff3fb4', '#f2f2f2', '#33363d'];
 const CFG = Object.assign({ name: 'Driver' + Math.floor(Math.random() * 900 + 100), color: COLORS[Math.floor(Math.random() * 8)], track: 0, mode: 'tt', laps: 3, body: 'drift', livery: 'stripe' }, JSON.parse(localStorage.getItem('md_cfg') || '{}'));
 function saveCfg() { localStorage.setItem('md_cfg', JSON.stringify(CFG)); if (typeof ACCT !== 'undefined') ACCT.save(); }
+const DEF_KEYS = { up: 'w', down: 's', left: 'a', right: 'd', hb: ' ', reset: 'r', cp: 'f', cam: 'c', mute: 'm', chat: 't' };
+const DEF_GFX = { res: 'sharp', smoke: 1, skids: 1, weather: 1, vignette: 1, gates: 1, fps: 0 };
+CFG.keys = Object.assign({}, DEF_KEYS, CFG.keys || {}); CFG.gfx = Object.assign({}, DEF_GFX, CFG.gfx || {});
+const GFX_SCALES = { sharp: 2, balanced: 1.5, fast: 1, retro: 0.6 };
+function applyGfx() { window.GFX_SCALE = GFX_SCALES[CFG.gfx.res] || 2; resize(); }
+applyGfx();
 const G = { state: 'menu', tr: null, me: null, rem: new Map(), cfg: null, mp: false, t0: 0, cdEnd: 0, res: new Map(), resList: null, firstFin: 0, final: false, rot: false, cam: { x: WORLD_W / 2, y: WORLD_H / 2, z: 0.5, a: 0 }, smoke: [], snow: [], acc: 0, last: 0, sendT: 0, hudT: 0, plist: [], attract: null, ai: 0 };
 const KEYS = {};
-function fmt(ms) { if (!ms) return '--'; const m = Math.floor(ms / 60000), s = (ms % 60000) / 1000; return m + ':' + s.toFixed(2).padStart(5, '0'); }
+function fmt(ms) { if (!ms) return '--'; const m = Math.floor(ms / 60000), s = (ms % 60000) / 1000; return m + ':' + s.toFixed(3).padStart(6, '0'); }
 function pop(t, col) { const d = document.createElement('div'); d.className = 'pop'; d.style.color = col || '#fff'; d.textContent = t; $('pops').appendChild(d); setTimeout(() => d.remove(), 1400); }
 function banner(t, small) { $('banner').textContent = t; $('banner').className = small ? 'small' : ''; }
 function rec(tr) { return JSON.parse(localStorage.getItem('md_rec_' + tr) || '{}'); }
@@ -28,13 +34,13 @@ function startSession(cfg, grid, mp) {
   G.cam.x = G.me.x; G.cam.y = G.me.y; G.cam.a = -G.me.a - Math.PI / 2;
   for (const s of ['menu', 'lobby', 'board']) $(s).classList.add('hidden');
   for (const s of ['hud', 'speedo', 'mini']) $(s).classList.remove('hidden');
-  $('hLap').style.display = cfg.laps || G.tt ? '' : 'none'; $('hKeys').classList.toggle('hidden', !G.tt); $('hKeys').textContent = 'R restart lap · F last checkpoint · ESC end session'; $('hTime').querySelector('small').textContent = G.tt ? 'LAP TIME' : 'TIME'; $('hPos').style.display = G.rem.size ? '' : 'none';
+  $('hLap').style.display = cfg.laps || G.tt ? '' : 'none'; $('hKeys').classList.toggle('hidden', !G.tt); $('hKeys').textContent = keyName(CFG.keys.reset) + ' restart lap · ' + keyName(CFG.keys.cp) + ' last checkpoint · ESC end session'; $('hTime').querySelector('small').textContent = G.tt ? 'LAP TIME' : 'TIME'; $('hPos').style.display = G.rem.size ? '' : 'none';
   G.state = 'countdown'; G.cdEnd = performance.now() + (cfg.laps || G.tt ? 3200 : 600); G.t0 = G.cdEnd; buildMini();
   sndInit();
 }
 function progress(c, i, now) {
   const n = G.tr.n, f = i / n, lf = c.prog / n;
-  const seg = Math.floor(f * 8); if (c.seg === undefined) c.seg = seg; if (seg !== c.seg) { if (seg === (c.seg + 1) % 8 && !c.off && c.lap >= 0) { c.cpI = (Math.floor(seg * n / 8) + 3) % n; if (G.tt) { G.tt.cps++; if (seg % 2 === 0 && seg) pop('CHECKPOINT ' + (seg / 2), '#bbb'); } } c.seg = seg; }
+  const seg = Math.floor(f * 8); if (c.seg === undefined) c.seg = seg; if (seg !== c.seg) { if (seg === (c.seg + 1) % 8 && !c.off && c.lap >= 0) { c.cpI = (Math.floor(seg * n / 8) + 3) % n; if (G.tt) { G.tt.cps++; if (seg) pop('CHECKPOINT ' + seg + ' / 7', '#ffd400'); } } c.seg = seg; }
   if (f > 0.2 && f < 0.3) c.cps |= 1; if (f > 0.45 && f < 0.55) c.cps |= 2; if (f > 0.7 && f < 0.8) c.cps |= 4;
   if (lf > 0.85 && f < 0.15) {
     if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.cps = 0; c.cpI = (i + 3) % n; }
@@ -85,7 +91,7 @@ function applyState(id, s) {
   r.tgt = { x: s[0], y: s[1], a: s[2], vx: s[3], vy: s[4], t: now }; c.steer = s[5]; c.drift = !!(s[6] & 1); c.brake = !!(s[6] & 2); c.hb = !!(s[6] & 4); c.lap = s[7]; c.prog = s[8]; c.score = s[9]; c.finished = s[10];
 }
 function resetCar(c) { const nr = nearestFull(G.tr, c.x, c.y), p = G.tr.pts[nr.i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[nr.i]; c.vx = c.vy = 0; c.hint = nr.i; c.cur = 0; c.drift = false; }
-function inputs() { const k = KEYS; return { up: k.w || k.arrowup, down: k.s || k.arrowdown, left: k.a || k.arrowleft, right: k.d || k.arrowright, hb: k[' '] }; }
+function inputs() { const k = KEYS, B = CFG.keys; return { up: k[B.up] || k.arrowup, down: k[B.down] || k.arrowdown, left: k[B.left] || k.arrowleft, right: k[B.right] || k.arrowright, hb: k[B.hb] }; }
 
 const STEP = 1 / 120;
 function tick(ts) {
@@ -116,8 +122,8 @@ function effects(dt) {
   const tg = G.tr.canvas.getContext('2d'), snow = G.tr.th.snow;
   for (const c of [G.me, ...[...G.rem.values()].map(r => r.car)]) {
     const sliding = (c.drift || c.hb || (c.brake && c.speed > 500)) && c.speed > 120;
-    if (sliding) { const w = wheelPos(c); if (c.rwL) { tg.strokeStyle = snow ? 'rgba(110,120,135,.35)' : 'rgba(15,15,18,.32)'; tg.lineWidth = 7; tg.lineCap = 'round'; tg.beginPath(); tg.moveTo(c.rwL[0], c.rwL[1]); tg.lineTo(w[0][0], w[0][1]); tg.moveTo(c.rwR[0], c.rwR[1]); tg.lineTo(w[1][0], w[1][1]); tg.stroke(); } c.rwL = w[0]; c.rwR = w[1];
-      if (G.smoke.length < 450) for (const p of w) if (Math.random() < 0.8) G.smoke.push({ x: p[0], y: p[1], vx: (Math.random() - 0.5) * 40 - c.vx * 0.05, vy: (Math.random() - 0.5) * 40 - c.vy * 0.05, r: 8, life: 0, max: 0.9 + Math.random() * 0.8 }); }
+    if (sliding) { const w = wheelPos(c); if (c.rwL && CFG.gfx.skids) { tg.strokeStyle = snow ? 'rgba(110,120,135,.35)' : 'rgba(15,15,18,.32)'; tg.lineWidth = 7; tg.lineCap = 'round'; tg.beginPath(); tg.moveTo(c.rwL[0], c.rwL[1]); tg.lineTo(w[0][0], w[0][1]); tg.moveTo(c.rwR[0], c.rwR[1]); tg.lineTo(w[1][0], w[1][1]); tg.stroke(); } c.rwL = w[0]; c.rwR = w[1];
+      if (CFG.gfx.smoke && G.smoke.length < 450) for (const p of w) if (Math.random() < 0.8) G.smoke.push({ x: p[0], y: p[1], vx: (Math.random() - 0.5) * 40 - c.vx * 0.05, vy: (Math.random() - 0.5) * 40 - c.vy * 0.05, r: 8, life: 0, max: 0.9 + Math.random() * 0.8 }); }
     else c.rwL = c.rwR = null;
   }
   G.smoke = G.smoke.filter(p => (p.life += dt) < p.max); for (const p of G.smoke) { p.x += p.vx * dt; p.y += p.vy * dt; p.r += 38 * dt; }
