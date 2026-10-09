@@ -29,6 +29,8 @@ function stepCar(c, inp, dt, tr) {
   if (c.drift) turn *= 1.25; if (inp.hb) turn *= 1.55; turn *= 1 - Math.min(0.32, Math.max(0, (speed - 620) / 1400));
   c.vx = fx * vF + rx * vR; c.vy = fy * vF + ry * vR; c.a += turn * dt;
   c.x += c.vx * dt; c.y += c.vy * dt;
+  if (tr && tr.walls && tr.walls.length) wallCollide(c, tr);
+  if (!isFinite(c.x) || !isFinite(c.y) || !isFinite(c.vx) || !isFinite(c.vy) || !isFinite(c.a)) { c.vx = c.vy = 0; if (!isFinite(c.a)) c.a = 0; if (!isFinite(c.x) || !isFinite(c.y)) { const p = tr.pts[c.hint || 0] || tr.pts[0]; c.x = p[0]; c.y = p[1]; } }
   const WW = (tr && tr.W) || WORLD_W, WH = (tr && tr.H) || WORLD_H; if (c.x < 30 || c.x > WW - 30) { c.x = Math.max(30, Math.min(WW - 30, c.x)); c.vx *= -0.3; }
   if (c.y < 30 || c.y > WH - 30) { c.y = Math.max(30, Math.min(WH - 30, c.y)); c.vy *= -0.3; }
   c.brake = inp.down && vF > 20; c.hb = !!inp.hb; c.speed = speed; c.vF = vF;

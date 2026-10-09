@@ -101,7 +101,8 @@ function resetCar(c) { const nr = nearestFull(G.tr, c.x, c.y), p = G.tr.pts[nr.i
 function inputs() { const k = KEYS, B = CFG.keys; return { up: k[B.up] || k.arrowup, down: k[B.down] || k.arrowdown, left: k[B.left] || k.arrowleft, right: k[B.right] || k.arrowright, hb: k[B.hb] }; }
 
 const STEP = 1 / 120;
-function tick(ts, bg) {
+function tick(ts, bg) { try { tickInner(ts, bg); } catch (e) { reportErr(e); if (!bg) requestAnimationFrame(tick); } }
+function tickInner(ts, bg) {
   if (!bg) requestAnimationFrame(tick);
   const now = performance.now(), dt = Math.min(bg ? 0.5 : 0.05, (ts - (G.last || ts)) / 1000); G.last = ts;
   if (G.state === 'menu' || G.state === 'lobby') { if (!bg) renderAttract(dt); return; }
