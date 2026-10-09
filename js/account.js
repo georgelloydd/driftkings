@@ -24,7 +24,7 @@ const ACCT = {
     if (CLOUD && fetchCloud !== false) { try { const r = await sb('GET', 'profiles?id=eq.' + this.priv + '&select=data'); if (r && r[0]) data = r[0].data; } catch (e) { } }
     if (data) { this.stats = Object.assign(blankStats(), data.stats || {}); if (data.cfg) { Object.assign(CFG, data.cfg); } }
     else this.stats = blankStats();
-    this.save(true); if (CLOUD) { this.save(); syncBests(false); this.register(); }
+    this.save(true); if (CLOUD) { this.save(); syncBests(false); this.register(); LB.flush(); }
     return !!data;
   },
   // lets the admin dev site look up a forgotten key by player name (needs register_key from supabase-admin.sql; silently skipped if missing)
@@ -59,7 +59,7 @@ let ONLINE_ERR = '';
 async function sb(method, path, body, prefer) {
   const key = ONLINE.SUPABASE_ANON_KEY.trim(), h = { apikey: key, 'Content-Type': 'application/json', Prefer: prefer || 'return=minimal' };
   if (key.startsWith('eyJ')) h.Authorization = 'Bearer ' + key; // legacy anon JWT only; sb_publishable_ keys go in apikey alone
-  let r; try { r = await fetch(ONLINE.SUPABASE_URL.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/, '') + '/rest/v1/' + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }); }
+  let r; try { r = await fetch(ONLINE.SUPABASE_URL.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/, '') + '/rest/v1/' + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' }); }
   catch (e) { ONLINE_ERR = 'Could not reach Supabase. Check SUPABASE_URL (should look like https://xxxx.supabase.co).'; throw new Error(ONLINE_ERR); }
   const t = await r.text();
   if (!r.ok) { let m = t; try { const j = JSON.parse(t); m = [j.message, j.hint, j.details].filter(Boolean).join(' · '); } catch (e) { } ONLINE_ERR = `${method} ${path.split('?')[0]} failed (${r.status}): ${m}`; console.warn('[Supabase]', ONLINE_ERR); throw new Error(ONLINE_ERR); }
@@ -86,14 +86,35 @@ const LB = {
     const e = { pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap: Math.round(ms), score: Math.round(score || 0), at: Date.now() };
     let L = this.localGet(tr).filter(x => x.pid !== e.pid || x.lap < e.lap); if (!L.some(x => x.pid === e.pid)) L.push(e);
     L.sort((a, b) => a.lap - b.lap); localStorage.setItem('md_lb_' + tr, JSON.stringify(L.slice(0, 50)));
-    if (CLOUD) sb('POST', 'laps', { track: tr, pid: e.pid, name: e.name, color: e.color, body: e.body, lap_ms: e.lap, score: e.score }).catch(() => { });
+    if (CLOUD) this.queue(tr, e);
+  },
+  pend() { return JSON.parse(localStorage.getItem('md_pending_' + ACCT.key) || '{}'); },
+  queue(tr, e) { const P = this.pend(); if (!P[tr] || e.lap < P[tr].lap) P[tr] = e; localStorage.setItem('md_pending_' + ACCT.key, JSON.stringify(P)); this.flush(); },
+  async flush() {
+    if (!CLOUD || this.busy) return; this.busy = true; clearTimeout(this.rt); let okAny = false, failed = false;
+    try { const P = this.pend();
+      for (const tr in P) { const e = P[tr];
+        try { await sb('POST', 'laps', { track: +tr, pid: e.pid, name: CFG.name, color: CFG.color, body: CFG.body, lap_ms: e.lap, score: e.score || 0 });
+          const Q = this.pend(); if (Q[tr] && Q[tr].lap === e.lap) delete Q[tr]; localStorage.setItem('md_pending_' + ACCT.key, JSON.stringify(Q));
+          const done = JSON.parse(localStorage.getItem('md_synced_' + ACCT.key) || '{}'); done[tr] = e.lap; localStorage.setItem('md_synced_' + ACCT.key, JSON.stringify(done)); okAny = true; }
+        catch (er) { failed = true; } }
+    } finally { this.busy = false; }
+    if (failed) { if (!this.warned && typeof pop === 'function' && G.state !== 'menu') { this.warned = true; pop('LAP NOT UPLOADED YET · RETRYING', '#ff9a2a'); } this.rt = setTimeout(() => this.flush(), 15000); }
+    else this.warned = false;
+    if (okAny && typeof TAB !== 'undefined' && TAB === 'lb' && typeof loadLB === 'function') loadLB();
+    if (Object.keys(this.pend()).length && !failed) this.flush();
   },
   async top(tr) {
     if (!CLOUD) return { live: false, rows: this.localGet(tr).slice(0, 10) };
     try {
       const r = await sb('GET', `laps?track=eq.${tr}&select=pid,name,color,body,lap_ms,score,created_at&order=lap_ms.asc&limit=200`);
-      const seen = new Set(), rows = []; for (const x of r) { if (seen.has(x.pid)) continue; seen.add(x.pid); rows.push({ pid: x.pid, name: x.name, color: x.color, body: x.body, lap: x.lap_ms, score: x.score, at: Date.parse(x.created_at) }); if (rows.length >= 10) break; }
-      return { live: true, rows };
+      const seen = new Set(), rows = []; for (const x of r) { if (seen.has(x.pid)) continue; seen.add(x.pid); rows.push({ pid: x.pid, name: x.name, color: x.color, body: x.body, lap: x.lap_ms, score: x.score, at: Date.parse(x.created_at) }); }
+      const mine = Math.round(ACCT.bestLap(tr)), P = this.pend(), srv = rows.find(x => x.pid === ACCT.pub);
+      if (mine && !TRACKS[tr].test && (!srv || mine < srv.lap) && (r.length < 200 || mine <= r[r.length - 1].lap_ms)) {
+        if (!P[tr]) this.queue(tr, { pid: ACCT.pub, lap: mine, score: 0 });
+        const me = { pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap: mine, at: Date.now(), pending: true };
+        const i = rows.indexOf(srv); if (i >= 0) rows.splice(i, 1); rows.push(me); rows.sort((a, b) => a.lap - b.lap); }
+      return { live: true, rows: rows.slice(0, 10) };
     } catch (e) { return { live: false, err: true, rows: this.localGet(tr).slice(0, 10) }; }
   },
 };

@@ -20,7 +20,7 @@ function refreshMenu() {
   $('chip').querySelector('i').style.background = CFG.color; $('chip').querySelector('b').textContent = CFG.name; $('chip').querySelector('small').textContent = ACCT.key.slice(0, 8) + '-····-····';
   refreshAcct();
 }
-let TAB = 'tt', LBT = 0, LBTimer = 0, KEYSHOWN = false;
+let LBSEQ = 0, TAB = 'tt', LBT = 0, LBTimer = 0, KEYSHOWN = false;
 function setTab(t) {
   TAB = t; document.querySelectorAll('.nv').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   document.querySelectorAll('#tabs > .tab').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-' + t));
@@ -31,10 +31,10 @@ function setTab(t) {
 }
 async function loadLB() {
   document.querySelectorAll('[data-lbt]').forEach(b => b.classList.toggle('on', +b.dataset.lbt === LBT));
-  const res = await LB.top(LBT);
+  const my = ++LBSEQ, res = await LB.top(LBT); if (my !== LBSEQ) return; // ignore slow, out-of-date responses
   $('lbHead').innerHTML = res.live ? '<span class="live"></span> Live · global · fastest lap per driver' : (res.err ? '⚠ Leaderboard server unreachable · showing this device' : 'This device · fastest lap per account') + ` · ${TRACKS[LBT].name}`;
   const best = res.rows[0] ? res.rows[0].lap : 0;
-  $('lbTable').innerHTML = '<tr><th>POS</th><th>DRIVER</th><th>CAR</th><th>BEST LAP</th><th>GAP</th><th>SET</th></tr>' + (res.rows.length ? res.rows.map((x, i) => `<tr class="${x.pid === ACCT.pub ? 'me' : ''}"><td class="pos">${i + 1}</td><td><i style="background:${esc(x.color || '#888')}"></i>${esc(x.name)}</td><td>${esc(carType(x.body).name)}</td><td>${fmt(x.lap)}</td><td>${i ? '+' + ((x.lap - best) / 1000).toFixed(3) : '—'}</td><td>${x.at ? new Date(x.at).toLocaleDateString() : ''}</td></tr>`).join('') : '<tr><td colspan="6" style="color:#8b8b93;padding:22px">No laps yet. Set one in Time trial.</td></tr>');
+  $('lbTable').innerHTML = '<tr><th>POS</th><th>DRIVER</th><th>CAR</th><th>BEST LAP</th><th>GAP</th><th>SET</th></tr>' + (res.rows.length ? res.rows.map((x, i) => `<tr class="${x.pid === ACCT.pub ? 'me' : ''}"><td class="pos">${i + 1}</td><td><i style="background:${esc(x.color || '#888')}"></i>${esc(x.name)}${x.pending ? ' <small style="color:#ff9a2a">· uploading</small>' : ''}</td><td>${esc(carType(x.body).name)}</td><td>${fmt(x.lap)}</td><td>${i ? '+' + ((x.lap - best) / 1000).toFixed(3) : '—'}</td><td>${x.at ? new Date(x.at).toLocaleDateString() : ''}</td></tr>`).join('') : '<tr><td colspan="6" style="color:#8b8b93;padding:22px">No laps yet. Set one in Time trial.</td></tr>');
 }
 function refreshAcct() {
   if (!ACCT.key) return; if (document.activeElement !== $('acctName')) $('acctName').value = CFG.name; $('keyOut').value = KEYSHOWN ? ACCT.key : ACCT.key.slice(0, 3) + '••••-••••-••••'; $('bReveal').textContent = KEYSHOWN ? 'Hide' : 'Show';
@@ -127,7 +127,7 @@ function showLobby(d) {
     if (c.track !== undefined && G.attract && G.attract.idx !== c.track) CFG.track = c.track;
   }
 }
-function addChat(m) { const d = document.createElement('div'); d.innerHTML = `<b>${esc(m.name)}:</b> ${esc(m.msg)}`; $('chatlog').appendChild(d); while ($('chatlog').children.length > 6) $('chatlog').firstChild.remove(); setTimeout(() => d.remove(), 8000); }
+function addChat(m) { const c = chatClean({ name: m.name, msg: m.msg, room: true }); if (c) chatLine(c); }
 netOn('lobby', showLobby);
 netOn('start', d => startSession(d.cfg, d.grid, true));
 netOn('all', d => { if (G.state !== 'race' && G.state !== 'countdown') return; for (const row of d.list) if (row[0] !== NET.myId) applyState(row[0], row.slice(1)); });
@@ -145,17 +145,18 @@ function handleEsc() {
   else if (G.state === 'lobby') toMenu();
 }
 addEventListener('keydown', e => {
+  if (SESS.blocked) return;
   sndInit();
-  if (document.activeElement === $('chatIn')) { if (e.key === 'Enter') { const t = $('chatIn').value.trim(); if (t) { if (NET.host) { const m = { t: 'chat', name: CFG.name, msg: t }; netSend(m); addChat(m); } else netSend({ t: 'chat', msg: t }); } $('chatIn').value = ''; $('chatIn').classList.add('hidden'); $('chatIn').blur(); } else if (e.key === 'Escape') { $('chatIn').classList.add('hidden'); $('chatIn').blur(); } return; }
+  if (document.activeElement === $('chatIn')) { if (e.key === 'Enter') { chatSend($('chatIn').value); chatClose(); } else if (e.key === 'Escape') chatClose(); return; }
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = e.key.toLowerCase(), B = CFG.keys;
   if (BINDING) { e.preventDefault(); if (k !== 'escape') setBind(BINDING, k); BINDING = null; renderBinds(); return; }
+  if (k === B.chat && !e.repeat && G.state !== 'countdown') { e.preventDefault(); chatOpen(); return; }
   KEYS[k] = true;
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) || (k === B.hb && G.state !== 'menu')) e.preventDefault();
   if (G.state === 'race' && G.me) {
     if (k === B.reset && !e.repeat) { if (G.tt) ttRestart(); else resetCar(G.me); }
     if (k === B.cp && !e.repeat) { if (G.tt) ttCheckpoint(); else resetCar(G.me); }
-    if (k === B.chat && G.mp) { e.preventDefault(); $('chatIn').classList.remove('hidden'); $('chatIn').focus(); }
   }
   if (k === B.cam && !e.repeat) { G.rot = !G.rot; pop(G.rot ? 'Chase camera' : 'Top-down camera'); }
   if (k === B.mute && !e.repeat) pop(sndMute() ? 'Sound off' : 'Sound on');

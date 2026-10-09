@@ -23,6 +23,7 @@ function setRec(tr, r) { localStorage.setItem('md_rec_' + tr, JSON.stringify(r))
 function myId() { return G.mp ? NET.myId : 'me'; }
 
 function startSession(cfg, grid, mp) {
+  if (SESS.blocked) return;
   if (cfg.mode === 'tt') { cfg = Object.assign({}, cfg, { laps: 0 }); mp = false; grid = null; }
   G.tt = cfg.mode === 'tt' ? { laps: 0, restarts: 0, cps: 0, start: 0 } : null; G.dist = 0;
   G.cfg = cfg; G.mp = mp; G.tr = buildTrack(cfg.track); G.rem.clear(); G.res.clear(); G.resList = null; G.final = false; G.firstFin = 0; G.smoke = [];
@@ -50,7 +51,7 @@ function progress(c, i, now) {
   if (lf > 0.85 && f < 0.15) {
     if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.ng = 0; c.cpI = (i + 3) % n; }
     else if ((c.ng || 0) >= K) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.ng = 0; c.cpI = (i + 3) % n; onLap(c, lt, now); }
-    else if (c === G.me && c.lap >= 0 && now - (c.missT || 0) > 3000) { c.missT = now; pop('MISSED A CHECKPOINT', '#ff3b3b'); }
+    else if (c === G.me && c.lap >= 0 && now - (c.missT || 0) > 3000) { c.missT = now; pop('LAP NOT COUNTED · MISSED CHECKPOINT ' + Math.min(K, (c.ng || 0) + 1), '#ff3b3b'); }
   }
   c.prog = i;
 }
@@ -100,10 +101,10 @@ function resetCar(c) { const nr = nearestFull(G.tr, c.x, c.y), p = G.tr.pts[nr.i
 function inputs() { const k = KEYS, B = CFG.keys; return { up: k[B.up] || k.arrowup, down: k[B.down] || k.arrowdown, left: k[B.left] || k.arrowleft, right: k[B.right] || k.arrowright, hb: k[B.hb] }; }
 
 const STEP = 1 / 120;
-function tick(ts) {
-  requestAnimationFrame(tick);
-  const now = performance.now(), dt = Math.min(0.05, (ts - (G.last || ts)) / 1000); G.last = ts;
-  if (G.state === 'menu' || G.state === 'lobby') { renderAttract(dt); return; }
+function tick(ts, bg) {
+  if (!bg) requestAnimationFrame(tick);
+  const now = performance.now(), dt = Math.min(bg ? 0.5 : 0.05, (ts - (G.last || ts)) / 1000); G.last = ts;
+  if (G.state === 'menu' || G.state === 'lobby') { if (!bg) renderAttract(dt); return; }
   const me = G.me, racing = G.state === 'race';
   if (G.state === 'countdown') { const left = G.cdEnd - now; banner(left > 0 ? (G.cfg.laps || G.tt ? String(Math.ceil(left / 1000)) : '') : ''); if (left <= 0) { G.state = 'race'; if (G.tt) G.tt.start = now; if (G.cfg.laps || G.tt) { banner('GO!'); setTimeout(() => { if ($('banner').textContent === 'GO!') banner(''); }, 900); } } }
   G.acc += dt; let inp = inputs();
@@ -122,8 +123,16 @@ function tick(ts) {
     const dx = me.x - c.x, dy = me.y - c.y, dd = Math.hypot(dx, dy); if (dd < 44 && dd > 0.01 && racing) { const nx = dx / dd, ny = dy / dd; me.x += nx * (44 - dd); me.y += ny * (44 - dd); const rv = (me.vx - c.vx) * nx + (me.vy - c.vy) * ny; if (rv < 0) { me.vx -= rv * 1.3 * nx; me.vy -= rv * 1.3 * ny; } if (me.cur > 200) { pop('CONTACT! DRIFT LOST', '#ff6060'); me.cur = 0; me.combo = 1; } } }
   // network
   if (G.mp && now - G.sendT > NET.rate) { G.sendT = now; const s = pack(me); if (NET.host) { const list = [['host', ...s]]; for (const [id, r] of G.rem) if (r.raw) list.push([id, ...r.raw]); netSend({ t: 'all', list }); if (G.firstFin && !G.final && now - G.firstFin > 30000) hostRes(true); } else netSend({ t: 'st', s }); }
+  if (bg) { sndUpdate(me, true); return; }
   effects(dt); render(dt, now); hud(now); sndUpdate(me, true);
 }
+// Browsers pause requestAnimationFrame in background tabs, which froze your car (and, for hosts, the whole room)
+// for everyone else. A worker timer keeps physics + networking running while the tab is hidden.
+(function () {
+  const bgTick = () => { if (document.hidden && G.me && (G.state === 'race' || G.state === 'countdown' || G.state === 'over')) tick(performance.now(), true); };
+  let w = null; try { w = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 33)'], { type: 'text/javascript' }))); w.onmessage = bgTick; } catch (e) { setInterval(bgTick, 50); }
+  document.addEventListener('visibilitychange', () => { for (const k in KEYS) KEYS[k] = false; if (!document.hidden) G.last = 0; });
+})();
 function effects(dt) {
   const tg = G.tr.canvas.getContext('2d'), snow = G.tr.th.snow;
   for (const c of [G.me, ...[...G.rem.values()].map(r => r.car)]) {
