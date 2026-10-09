@@ -95,11 +95,11 @@ function showBoard() {
   $('board').innerHTML = h; $('board').classList.remove('hidden');
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-function pack(c) { return [c.x | 0, c.y | 0, +c.a.toFixed(3), c.vx | 0, c.vy | 0, +c.steer.toFixed(2), (c.drift ? 1 : 0) | (c.brake ? 2 : 0) | (c.hb ? 4 : 0), c.lap, c.prog, Math.round(c.score + c.cur), c.finished | 0, G.rid]; }
+function pack(c) { return [c.x | 0, c.y | 0, +c.a.toFixed(3), c.vx | 0, c.vy | 0, +c.steer.toFixed(2), (c.drift ? 1 : 0) | (c.brake ? 2 : 0) | (c.hb ? 4 : 0), c.lap, c.prog, Math.round(c.score + c.cur), c.finished | 0, G.rid, Math.round(performance.now())]; }
 function applyState(id, s) {
   const r = G.rem.get(id); if (!r || (s[11] || 0) !== G.rid) return; r.raw = s; if (s[10] && !r.car.finished) raiseFlag(r.car.name); const c = r.car, now = performance.now();
   if (!r.tgt) { c.x = s[0]; c.y = s[1]; c.a = s[2]; }
-  r.tgt = { x: s[0], y: s[1], a: s[2], vx: s[3], vy: s[4], t: now }; c.steer = s[5]; c.drift = !!(s[6] & 1); c.brake = !!(s[6] & 2); c.hb = !!(s[6] & 4); c.lap = s[7]; c.prog = s[8]; c.score = s[9]; c.finished = s[10];
+  r.tgt = { x: s[0], y: s[1], a: s[2], vx: s[3], vy: s[4], t: now }; bufState(r, s, now); c.steer = s[5]; c.drift = !!(s[6] & 1); c.brake = !!(s[6] & 2); c.hb = !!(s[6] & 4); c.lap = s[7]; c.prog = s[8]; c.score = s[9]; c.finished = s[10];
 }
 function resetCar(c) { const nr = nearestFull(G.tr, c.x, c.y), p = G.tr.pts[nr.i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[nr.i]; c.vx = c.vy = 0; c.hint = nr.i; c.cur = 0; c.drift = false; }
 function inputs() { const k = KEYS, B = CFG.keys; return { up: k[B.up] || k.arrowup, down: k[B.down] || k.arrowdown, left: k[B.left] || k.arrowleft, right: k[B.right] || k.arrowright, hb: k[B.hb] }; }
@@ -124,8 +124,7 @@ function tickInner(ts, bg) {
     const d = G.tr.dirs[me.hint], fwdTrack = me.vx * Math.cos(d) + me.vy * Math.sin(d); me.wrong = fwdTrack < -120 ? me.wrong + dt : 0;
   }
   // remote cars
-  for (const [id, r] of G.rem) { if (!r.tgt) continue; const c = r.car, age = Math.min(0.25, (now - r.tgt.t) / 1000), px = r.tgt.x + r.tgt.vx * age, py = r.tgt.y + r.tgt.vy * age, k = Math.min(1, dt * 14);
-    if (Math.hypot(px - c.x, py - c.y) > 400) { c.x = px; c.y = py; } else { c.x += (px - c.x) * k; c.y += (py - c.y) * k; } c.a += angDiff(r.tgt.a, c.a) * k; c.vx = r.tgt.vx; c.vy = r.tgt.vy; c.speed = Math.hypot(c.vx, c.vy); c.slip = Math.abs(angDiff(Math.atan2(c.vy, c.vx), c.a));
+  for (const [id, r] of G.rem) { if (!r.tgt) continue; const c = r.car; interpRemote(r, c, now);
     const dx = me.x - c.x, dy = me.y - c.y, dd = Math.hypot(dx, dy); if (dd < 44 && dd > 0.01 && racing && !c.finished && !me.finished) { const nx = dx / dd, ny = dy / dd; me.x += nx * (44 - dd); me.y += ny * (44 - dd); const rv = (me.vx - c.vx) * nx + (me.vy - c.vy) * ny; if (rv < 0) { me.vx -= rv * 1.3 * nx; me.vy -= rv * 1.3 * ny; } if (me.cur > 200) { pop('CONTACT! DRIFT LOST', '#ff6060'); me.cur = 0; me.combo = 1; } } }
   // network
   if (G.mp && now - G.sendT > NET.rate) { G.sendT = now; const s = pack(me); if (NET.host) { const list = [['host', ...s]]; for (const [id, r] of G.rem) if (r.raw) list.push([id, ...r.raw]); netSend({ t: 'all', list }); if (G.firstFin && !G.final && now - G.firstFin > 120000) hostRes(true); } else netSend({ t: 'st', s }); }
@@ -202,4 +201,33 @@ function lapExtras(lt, rep, pb, sr) {
   if (S.length === K && S.every(x => x > 0) && (!sr || lt < sr.lap)) { try { localStorage.setItem('md_split_' + G.cfg.track, JSON.stringify({ lap: Math.round(lt), s: S.map(Math.round), n: G.tr.n, k: K })); } catch (e) { } }
   G.curSplits = []; G.splitStart = G.me.lapStart;
   if (pb && rep) { try { localStorage.setItem('md_rep_' + G.cfg.track, rep); } catch (e) { } if (G.tt && (!G.ghostCar || G.ghostCar.own)) setGhost(rep, null); }
+}
+
+// ===== Smooth remote cars: snapshot interpolation =====
+// Each update carries the sender's clock. We line updates up on a steady timeline and draw other cars a
+// little in the past, sliding smoothly between real positions, instead of guessing ahead and snapping back.
+// Late or bunched-up packets (the main cause of jitter) no longer make cars stutter or freeze.
+function bufState(r, s, now) {
+  const st = typeof s[12] === 'number' ? s[12] : now, off = now - st;
+  r.off = (r.off == null || off < r.off) ? off : r.off + Math.min(0.3, (off - r.off) * 0.01); // best-case delay, slowly follows clock drift
+  r.jit = Math.max(off - r.off, (r.jit || 0) * 0.985); // how late packets have recently been
+  const T = st + r.off, B = r.buf || (r.buf = []), L = B[B.length - 1];
+  if (L && T <= L.t) return;
+  B.push({ t: T, x: s[0], y: s[1], a: s[2], vx: s[3], vy: s[4] });
+  while (B.length > 40) B.shift();
+}
+function interpRemote(r, c, now) {
+  const B = r.buf; if (!B || !B.length) return;
+  const delay = Math.max(70, Math.min(260, NET.rate * 1.3 + (r.jit || 0) + 10)), rt = now - delay, L = B[B.length - 1];
+  let x, y, a, vx, vy;
+  if (rt >= L.t) { const e = Math.min(0.2, (rt - L.t) / 1000); x = L.x + L.vx * e; y = L.y + L.vy * e; a = L.a; vx = L.vx; vy = L.vy; }
+  else if (rt <= B[0].t) ({ x, y, a, vx, vy } = B[0]);
+  else {
+    let i = B.length - 1; while (i > 0 && B[i - 1].t > rt) i--;
+    const p = B[i - 1], q = B[i], f = (rt - p.t) / Math.max(1, q.t - p.t);
+    if (Math.hypot(q.x - p.x, q.y - p.y) > 400) ({ x, y, a, vx, vy } = f < 0.5 ? p : q);
+    else { x = p.x + (q.x - p.x) * f; y = p.y + (q.y - p.y) * f; a = p.a + angDiff(q.a, p.a) * f; vx = p.vx + (q.vx - p.vx) * f; vy = p.vy + (q.vy - p.vy) * f; }
+  }
+  while (B.length > 2 && B[1].t < rt - 500) B.shift();
+  c.x = x; c.y = y; c.a = a; c.vx = vx; c.vy = vy; c.speed = Math.hypot(vx, vy); c.slip = Math.abs(angDiff(Math.atan2(vy, vx), a));
 }
