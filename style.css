@@ -105,7 +105,3 @@ input:focus{border-color:var(--red)}
 .srv em{color:#e10600;font-weight:800;font-style:italic;font-size:12px;letter-spacing:.08em}
 .srv .btn{padding:6px 14px}
 .dim{color:#777;font-weight:600;letter-spacing:0;text-transform:none}
-
-#tab-join .servers{max-height:none}
-#codeIn{font-size:22px;letter-spacing:.3em;text-transform:uppercase;max-width:260px}
-#pubRow{margin-top:14px}

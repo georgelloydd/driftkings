@@ -1,9 +1,9 @@
 // ===== Menus, lobby, input, network wiring =====
 emitCfg = () => ({ track: CFG.track, laps: CFG.laps, mode: CFG.mode });
 const MODES = { race: 'Race (fastest)', drift: 'Drift battle', tt: 'Race (fastest)' };
-function msg(id, t) { if (id === 'menuMsg') id = { host: 'hostMsg', join: 'joinMsg' }[TAB] || 'ttMsg'; $(id).textContent = t || ''; }
+function msg(id, t) { $(id).textContent = t || ''; }
 function refreshMenu() {
-  if (CFG.mode !== 'race' && CFG.mode !== 'drift') CFG.mode = 'race'; // host-room mode; time trial has its own tab
+  if (CFG.mode !== 'tt' && CFG.mode !== 'race' && CFG.mode !== 'drift') CFG.mode = 'tt';
   $('nameIn').value = CFG.name;
   document.querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s.dataset.c === CFG.color));
   document.querySelectorAll('.tk').forEach(s => s.classList.toggle('on', +s.dataset.t === CFG.track));
@@ -11,20 +11,19 @@ function refreshMenu() {
   document.querySelectorAll('[data-l]').forEach(s => s.classList.toggle('on', +s.dataset.l === CFG.laps));
   document.querySelectorAll('.ty').forEach(s => { s.classList.toggle('on', s.dataset.b === CFG.body); drawCarPreview(s.querySelector('canvas'), s.dataset.b, CFG.color, CFG.livery, -0.35); });
   document.querySelectorAll('[data-lv]').forEach(s => s.classList.toggle('on', s.dataset.lv === CFG.livery));
-  $('hostNet').textContent = netMode() === 'servers' ? 'Runs on the online servers: friends can join from any network.' : 'Peer-to-peer (no Supabase set up): works best when everyone is on the same wifi.';
-  $('pubRow').classList.toggle('hidden', netMode() !== 'servers');
+  const tt = CFG.mode === 'tt';
+  $('lapRow').classList.toggle('hidden', tt); $('ttHint').classList.toggle('hidden', !tt); $('joinRow').classList.toggle('hidden', tt); $('bHost').classList.toggle('hidden', tt); $('srvBox').classList.toggle('hidden', tt);
+  $('bSolo').textContent = tt ? '▶ Start time trial' : '▶ Play solo';
   const r = rec(CFG.track); $('records').textContent = `Your records on ${TRACKS[CFG.track].name}: best lap ${fmt(ACCT.bestLap(CFG.track) || r.lap)} • best drift score ${(r.score || 0).toLocaleString()}`;
   const t = carType(CFG.body); $('gDesc').textContent = t.name.toUpperCase() + ' · ' + t.desc;
   drawCarPreview($('gPrev'), CFG.body, CFG.color, CFG.livery, -0.5);
   $('chip').querySelector('i').style.background = CFG.color; $('chip').querySelector('b').textContent = CFG.name; $('chip').querySelector('small').textContent = ACCT.key.slice(0, 8) + '-····-····';
   refreshAcct();
 }
-let TAB = 'tt', LBT = 0, LBTimer = 0, KEYSHOWN = false;
+let TAB = 'play', LBT = 0, LBTimer = 0, KEYSHOWN = false;
 function setTab(t) {
   TAB = t; document.querySelectorAll('.nv').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  for (const x of ['tt', 'host', 'join', 'garage', 'lb', 'acct']) $('tab-' + x).classList.toggle('hidden', x !== t);
-  const slot = document.querySelector('#tab-' + t + ' .trackSlot'); if (slot) slot.appendChild($('tracks'));
-  if (t === 'join') setTimeout(() => $('codeIn').focus(), 0);
+  for (const x of ['play', 'garage', 'lb', 'acct']) $('tab-' + x).classList.toggle('hidden', x !== t);
   clearInterval(LBTimer); if (t === 'lb') { LBT = CFG.track; loadLB(); LBTimer = setInterval(() => { if (G.state === 'menu' && TAB === 'lb') loadLB(); }, 5000); }
   if (t === 'acct') refreshAcct();
 }
@@ -44,9 +43,9 @@ function refreshAcct() {
 }
 function renderServers(list) {
   const box = $('servers');
-  if (list === null) { $('srvMode').textContent = '· peer-to-peer'; box.innerHTML = '<p class="hint">No open servers list yet: add your Supabase details in deploy.html to get online servers anyone can join from any network. For now, enter your friend\'s code above (peer-to-peer, best on the same wifi).</p>'; return; }
+  if (list === null) { $('srvMode').textContent = '· peer-to-peer'; $('pubChk').parentElement.classList.add('hidden'); box.innerHTML = '<p class="hint">Add your Supabase details in deploy.html to get online servers (friends can join from any network) and a public server list. Without it, rooms are peer-to-peer and work best on the same wifi.</p>'; return; }
   $('srvMode').textContent = '· online · ' + list.length + ' open';
-  box.innerHTML = list.length ? list.map(v => `<div class="srv"><b>${esc(v.host)}</b><span>${esc((TRACKS[v.track] || {}).name || '')} · ${esc(String(v.mode || '').toUpperCase())}${v.laps ? ' · ' + v.laps + ' laps' : ''}</span><span>${v.players}/8</span>${v.inRace ? '<em>RACING</em>' : `<button class="btn dark sm" data-code="${esc(v.code)}">Join</button>`}</div>`).join('') : '<p class="hint">No open rooms right now. Create one in Host Room and it will show up here for everyone.</p>';
+  box.innerHTML = list.length ? list.map(v => `<div class="srv"><b>${esc(v.host)}</b><span>${esc((TRACKS[v.track] || {}).name || '')} · ${esc(String(v.mode || '').toUpperCase())}${v.laps ? ' · ' + v.laps + ' laps' : ''}</span><span>${v.players}/8</span>${v.inRace ? '<em>RACING</em>' : `<button class="btn dark sm" data-code="${esc(v.code)}">Join</button>`}</div>`).join('') : '<p class="hint">No public rooms right now. Host one and it will show up here for everyone.</p>';
   box.querySelectorAll('[data-code]').forEach(b => b.onclick = () => { if (G.state !== 'menu') return; $('codeIn').value = b.dataset.code; $('bJoin').click(); });
 }
 function buildMenu() {
@@ -79,9 +78,10 @@ function buildMenu() {
   $('bBackup').onclick = () => copy(ACCT.backup(), 'Backup code copied. Paste it into Sign in on another device.');
   $('bSignIn').onclick = async () => { try { const m = await ACCT.restore($('keyIn').value); $('keyIn').value = ''; saveCfg(); refreshMenu(); msg('acctMsg', m); } catch (e) { msg('acctMsg', e.message); } };
   $('bNew').onclick = async () => { if (!confirm('Start a new account? Copy your current key or backup code first if you want to come back to it.')) return; await ACCT.create(); KEYSHOWN = true; refreshMenu(); msg('acctMsg', 'New account created. Copy your key now.'); };
-  $('bSolo').onclick = () => { msg('menuMsg'); G.plist = []; startSession({ track: CFG.track, laps: 0, mode: 'tt' }, null, false); };
+  $('bSolo').onclick = () => { msg('menuMsg'); G.plist = []; startSession(emitCfg(), null, false); };
   $('bHost').onclick = () => {
     if (!netAvailable()) return msg('menuMsg', 'Online play needs internet: the multiplayer library could not load.');
+    if (CFG.mode === 'tt') { CFG.mode = 'race'; saveCfg(); }
     msg('menuMsg', 'Creating room…'); $('bHost').disabled = true;
     netHost(CFG, e => { $('bHost').disabled = false; if (e) { netLeave(); return msg('menuMsg', netErrText(e)); } msg('menuMsg'); G.mp = true; G.state = 'lobby'; netLobby(); });
   };
