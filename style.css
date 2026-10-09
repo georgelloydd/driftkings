@@ -153,3 +153,8 @@ input:focus{border-color:var(--red)}
 .dupBox p{color:#bbb;line-height:1.5;margin:0 0 20px}
 .dupBox small{display:block;margin-top:12px;color:#777;font-size:11px}
 #dupBtn{background:var(--red);color:#fff;border:0;border-radius:5px;padding:12px 22px;font-weight:900;font-style:italic;letter-spacing:1px;cursor:pointer;font-size:15px}
+
+.resetOv{position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center}
+.resetBox{width:440px;max-width:92vw;background:#111114;border:1px solid #2a2a30;border-top:3px solid #ff2a2a;border-radius:8px;padding:22px;color:#ddd}
+.resetBox h3{margin:0 0 8px;font-style:italic;text-transform:uppercase;color:#fff}.resetBox .row{display:flex;gap:8px;margin-top:10px;justify-content:flex-end}
+.resetBox input{flex:1;background:#0a0a0c;color:#fff;border:1px solid #2a2a30;border-radius:5px;padding:8px;font-family:monospace}.resetBox .sm{font-size:12px;opacity:.75}
