@@ -12,7 +12,7 @@ function netAvailable() { return netMode() !== 'none'; }
 function randCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; }
 function netHost(me, cb) { return useRT() ? rtHost(me, cb) : p2pHost(me, cb); }
 function netJoin(code, me, cb) { return useRT() ? rtJoin(code, me, cb) : p2pJoin(code, me, cb); }
-function meInfo(me) { return { name: me.name, color: me.color, body: me.body, livery: me.livery }; }
+function meInfo(me) { return Object.assign({ name: me.name }, carLook(me)); }
 
 // ---------- Supabase Realtime (servers) ----------
 let SBC = null;
@@ -93,7 +93,7 @@ function hostData(c, d) {
   if (d.t === 'hello') {
     if (NET.inRace) { c.send({ t: 'busy', msg: 'A race is in progress. Try again when it finishes.' }); setTimeout(() => c.close(), 500); return; }
     if (NET.players.size >= 8 && !NET.players.has(c.peer)) { c.send({ t: 'busy', msg: 'Room is full (8 players).' }); setTimeout(() => c.close(), 500); return; }
-    NET.conns.set(c.peer, c); NET.players.set(c.peer, { id: c.peer, name: String(d.name || 'Driver').slice(0, 14), color: d.color, body: String(d.body || ''), livery: String(d.livery || '') });
+    NET.conns.set(c.peer, c); NET.players.set(c.peer, Object.assign({ id: c.peer, name: String(d.name || 'Driver').slice(0, 14) }, carLook(d)));
     c.send({ t: 'welcome', id: c.peer }); emit('joined', c.peer); netLobby();
   } else if (!NET.players.has(c.peer)) return;
   else if (d.t === 'st') { const p = NET.players.get(c.peer); p.s = d.s; emit('st', { id: c.peer, s: d.s }); }
@@ -106,7 +106,7 @@ function netSend(m) {
   if (NET.rt) { rtSend(NET.host ? undefined : 'host', m); return; }
   if (NET.host) { for (const c of NET.conns.values()) if (c.open) c.send(m); } else if (NET.hc && NET.hc.open) NET.hc.send(m);
 }
-function netLobby() { if (!NET.host) return; const m = { t: 'lobby', players: [...NET.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, body: p.body, livery: p.livery })), cfg: emitCfg() }; netSend(m); emit('lobby', m); rtListServer(); }
+function netLobby() { if (!NET.host) return; const m = { t: 'lobby', players: [...NET.players.values()].map(p => Object.assign({ id: p.id, name: p.name }, carLook(p))), cfg: emitCfg() }; netSend(m); emit('lobby', m); rtListServer(); }
 let emitCfg = () => ({});
 function netLeave() {
   const wasHost = NET.host && NET.rt; NET.on = false; NET.syncFn = null;

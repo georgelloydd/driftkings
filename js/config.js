@@ -1,4 +1,4 @@
-// ===== Online services (written by deploy.html) =====
+// ===== Online services (written by the Mini Drifters dev site) =====
 const ONLINE = {
   SUPABASE_URL: "https://mfqihieztxqhgxzvdrii.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_yjTAhbs4NW--vtsDwvrBfw_JJi88D9L",

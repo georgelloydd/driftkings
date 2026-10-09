@@ -10,20 +10,28 @@ const TRACKS = [
 ];
 function crPoint(p0, p1, p2, p3, t) { const t2 = t * t, t3 = t2 * t; return [0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3), 0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)]; }
 function rnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
-function buildTrack(idx, noBake) {
-  const def = TRACKS[idx], cp = def.pts.map(p => [p[0] * WORLD_W, p[1] * WORLD_H]), raw = [];
+function trackDef(x) { return x && typeof x === 'object' ? x : (TRACKS[x] || TRACKS[0]); }
+function nearIdx(pts, x, y) { let bi = 0, bd = 1e18; for (let i = 0; i < pts.length; i++) { const d = (pts[i][0] - x) ** 2 + (pts[i][1] - y) ** 2; if (d < bd) { bd = d; bi = i; } } return bi; }
+function buildTrack(x, noBake) {
+  const def = trackDef(x), idx = typeof x === 'number' ? x : 0, cp = def.pts.map(p => [p[0] * WORLD_W, p[1] * WORLD_H]), raw = [];
   for (let i = 0; i < cp.length; i++) { const p0 = cp[(i - 1 + cp.length) % cp.length], p1 = cp[i], p2 = cp[(i + 1) % cp.length], p3 = cp[(i + 2) % cp.length]; for (let k = 0; k < 60; k++) raw.push(crPoint(p0, p1, p2, p3, k / 60)); }
   // resample to even spacing (~12px)
   let L = 0; const cum = [0]; for (let i = 1; i <= raw.length; i++) { const a = raw[i - 1], b = raw[i % raw.length]; L += Math.hypot(b[0] - a[0], b[1] - a[1]); cum.push(L); }
   const N = Math.round(L / 12), pts = []; let j = 0;
   for (let k = 0; k < N; k++) { const d = k * L / N; while (cum[j + 1] < d) j++; const a = raw[j], b = raw[(j + 1) % raw.length], f = (d - cum[j]) / (cum[j + 1] - cum[j] || 1); pts.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]); }
+  // start position + direction: rotate so pts[0] is the start line, optionally reverse
+  if (def.start) { const s0 = nearIdx(pts, def.start[0] * WORLD_W, def.start[1] * WORLD_H); const r = pts.splice(0, s0); pts.push(...r); }
+  if (def.rev) { const r = pts.splice(1).reverse(); pts.push(...r); }
   const dirs = pts.map((p, i) => { const q = pts[(i + 1) % N], r = pts[(i - 1 + N) % N]; return Math.atan2(q[1] - r[1], q[0] - r[0]); });
-  const tr = { idx, def, name: def.name, w: def.width, pts, dirs, n: N, len: L, th: def.th };
+  // checkpoint gates: explicit positions projected onto the line, else 7 evenly spaced
+  let gi = Array.isArray(def.cps) && def.cps.length ? def.cps.map(c => nearIdx(pts, c[0] * WORLD_W, c[1] * WORLD_H)) : [1, 2, 3, 4, 5, 6, 7].map(k => Math.floor(k * N / 8));
+  gi = [...new Set(gi.filter(i => i > N * 0.02 && i < N * 0.98))].sort((a, b) => a - b);
+  const tr = { idx, def, name: def.name, w: def.width, pts, dirs, n: N, len: L, th: def.th, gates: gi.map((i, k) => ({ s: k + 1, i })) };
   tr.canvas = noBake ? null : bakeTrack(tr); return tr;
 }
 function pathTrack(g, tr) { g.beginPath(); tr.pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); }
 function bakeTrack(tr) {
-  const c = document.createElement('canvas'); c.width = WORLD_W; c.height = WORLD_H; const g = c.getContext('2d'), th = tr.th, R = rnd(tr.idx * 977 + 13);
+  const c = document.createElement('canvas'); c.width = WORLD_W; c.height = WORLD_H; const g = c.getContext('2d'), th = tr.th, R = rnd(tr.def.seed || (tr.idx * 977 + 13));
   g.fillStyle = th.grass; g.fillRect(0, 0, WORLD_W, WORLD_H);
   for (let i = 0; i < 2600; i++) { g.fillStyle = R() < 0.5 ? th.grass2 : 'rgba(0,0,0,.05)'; g.globalAlpha = 0.35; g.beginPath(); g.arc(R() * WORLD_W, R() * WORLD_H, 20 + R() * 90, 0, 7); g.fill(); }
   g.globalAlpha = 1; g.lineJoin = g.lineCap = 'round';

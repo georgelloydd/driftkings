@@ -24,10 +24,12 @@ const ACCT = {
     if (CLOUD && fetchCloud !== false) { try { const r = await sb('GET', 'profiles?id=eq.' + this.priv + '&select=data'); if (r && r[0]) data = r[0].data; } catch (e) { } }
     if (data) { this.stats = Object.assign(blankStats(), data.stats || {}); if (data.cfg) { Object.assign(CFG, data.cfg); } }
     else this.stats = blankStats();
-    this.save(true); if (CLOUD) { this.save(); syncBests(false); }
+    this.save(true); if (CLOUD) { this.save(); syncBests(false); this.register(); }
     return !!data;
   },
-  data() { return { cfg: { name: CFG.name, color: CFG.color, body: CFG.body, livery: CFG.livery }, stats: this.stats }; },
+  // lets the admin dev site look up a forgotten key by player name (needs register_key from supabase-admin.sql; silently skipped if missing)
+  register() { if (CLOUD && this.key) sb('POST', 'rpc/register_key', { p_key: this.key, p_name: CFG.name }).catch(() => { }); },
+  data() { return { cfg: Object.assign({ name: CFG.name }, carLook(CFG)), stats: this.stats }; },
   save(localOnly) {
     if (!this.key) return; localStorage.setItem('md_acct_' + this.key, JSON.stringify(this.data()));
     if (CLOUD && !localOnly) { clearTimeout(this._t); this._t = setTimeout(() => sb('POST', 'profiles', { id: this.priv, data: this.data(), updated_at: new Date().toISOString() }, 'resolution=merge-duplicates,return=minimal').catch(() => { }), 800); }
@@ -47,7 +49,7 @@ const ACCT = {
   async rename(name) {
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k.startsWith('md_lb_')) continue; const L = JSON.parse(localStorage.getItem(k) || '[]'); L.forEach(x => { if (x.pid === this.pub) x.name = name; }); localStorage.setItem(k, JSON.stringify(L)); }
     if (!CLOUD) return 'Name saved.';
-    try { await sb('POST', 'rpc/rename_player', { p_key: this.key, p_name: name }); return 'Name saved and updated on the online leaderboards.'; }
+    try { await sb('POST', 'rpc/rename_player', { p_key: this.key, p_name: name }); this.register(); return 'Name saved and updated on the online leaderboards.'; }
     catch (e) { return /404|PGRST202|rename_player/.test(e.message) ? 'Name saved. Old online leaderboard times keep the old name until you run the rename_player SQL from the README.' : 'Name saved here, but the online update failed: ' + e.message; }
   },
   lap(tr, ms, score) { const b = this.stats.best[tr] = this.stats.best[tr] || {}; let pb = false; if (!b.lap || ms < b.lap) { b.lap = ms; pb = true; LB.submit(tr, ms, score); } this.save(); return pb; },

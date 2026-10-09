@@ -5,7 +5,7 @@ let VW = 0, VH = 0, DPR = 1;
 function resize() { DPR = Math.min(window.GFX_SCALE || 2, devicePixelRatio || 1); VW = innerWidth; VH = innerHeight; cv.width = VW * DPR; cv.height = VH * DPR; }
 addEventListener('resize', resize); resize();
 const COLORS = ['#ff3b3b', '#ff8c1a', '#ffd60a', '#2ecc71', '#1ec8ff', '#3d6bff', '#a24dff', '#ff3fb4', '#f2f2f2', '#33363d'];
-const CFG = Object.assign({ name: 'Driver' + Math.floor(Math.random() * 900 + 100), color: COLORS[Math.floor(Math.random() * 8)], track: 0, mode: 'tt', laps: 3, body: 'drift', livery: 'stripe' }, JSON.parse(localStorage.getItem('md_cfg') || '{}'));
+const CFG = Object.assign({ name: 'Driver' + Math.floor(Math.random() * 900 + 100), color: COLORS[Math.floor(Math.random() * 8)], track: 0, mode: 'tt', laps: 3, body: 'drift', livery: 'stripes', accent: '#ffffff', accent2: '#111111', rim: '#c9ccd2', finish: 'gloss', num: '7' }, JSON.parse(localStorage.getItem('md_cfg') || '{}'));
 function saveCfg() { localStorage.setItem('md_cfg', JSON.stringify(CFG)); if (typeof ACCT !== 'undefined') ACCT.save(); }
 const DEF_KEYS = { up: 'w', down: 's', left: 'a', right: 'd', hb: ' ', reset: 'r', cp: 'f', cam: 'c', mute: 'm', chat: 't' };
 const DEF_GFX = { res: 'sharp', smoke: 1, skids: 1, weather: 1, vignette: 1, gates: 1, fps: 0 };
@@ -28,8 +28,8 @@ function startSession(cfg, grid, mp) {
   G.cfg = cfg; G.mp = mp; G.tr = buildTrack(cfg.track); G.rem.clear(); G.res.clear(); G.resList = null; G.final = false; G.firstFin = 0; G.smoke = [];
   grid = grid || [myId()];
   grid.forEach((id, slot) => {
-    if (id === myId()) { G.me = newCar(slot, G.tr, id, CFG.name, CFG.color); G.me.body = CFG.body; G.me.livery = CFG.livery; G.me.cpI = null; }
-    else { const p = G.plist.find(q => q.id === id) || { name: 'Driver', color: '#888' }; const rc = newCar(slot, G.tr, id, p.name, p.color); rc.body = p.body; rc.livery = p.livery; G.rem.set(id, { car: rc, tgt: null, raw: null }); }
+    if (id === myId()) { G.me = newCar(slot, G.tr, id, CFG.name, CFG.color); Object.assign(G.me, carLook(CFG)); G.me.cpI = null; }
+    else { const p = G.plist.find(q => q.id === id) || { name: 'Driver', color: '#888' }; const rc = newCar(slot, G.tr, id, p.name, p.color); Object.assign(rc, carLook(p)); rc.color = carLook(p).color; G.rem.set(id, { car: rc, tgt: null, raw: null }); }
   });
   G.cam.x = G.me.x; G.cam.y = G.me.y; G.cam.a = -G.me.a - Math.PI / 2;
   for (const s of ['menu', 'lobby', 'board']) $(s).classList.add('hidden');
@@ -38,19 +38,25 @@ function startSession(cfg, grid, mp) {
   G.state = 'countdown'; G.cdEnd = performance.now() + (cfg.laps || G.tt ? 3200 : 600); G.t0 = G.cdEnd; buildMini();
   sndInit();
 }
+function segOf(i) { const g = G.tr.gates; let s = 0; while (s < g.length && g[s].i <= i) s++; return s; }
 function progress(c, i, now) {
-  const n = G.tr.n, f = i / n, lf = c.prog / n;
-  const seg = Math.floor(f * 8); if (c.seg === undefined) c.seg = seg; if (seg !== c.seg) { if (seg === (c.seg + 1) % 8 && !c.off && c.lap >= 0) { c.cpI = (Math.floor(seg * n / 8) + 3) % n; if (G.tt) { G.tt.cps++; if (seg) pop('CHECKPOINT ' + seg + ' / 7', '#ffd400'); } } c.seg = seg; }
-  if (f > 0.2 && f < 0.3) c.cps |= 1; if (f > 0.45 && f < 0.55) c.cps |= 2; if (f > 0.7 && f < 0.8) c.cps |= 4;
+  const n = G.tr.n, f = i / n, lf = c.prog / n, K = G.tr.gates.length;
+  const seg = segOf(i); if (c.seg === undefined) c.seg = seg;
+  if (seg !== c.seg) {
+    if (seg === c.seg + 1 && c.lap >= 0) { c.ng = (c.ng || 0) + 1; if (!c.off) c.cpI = (G.tr.gates[seg - 1].i + 3) % n; if (c === G.me) { if (G.tt) G.tt.cps++; pop('CHECKPOINT ' + seg + ' / ' + K, '#ffd400'); } }
+    else if (seg === c.seg - 1) c.ng = Math.max(0, (c.ng || 0) - 1);
+    c.seg = seg;
+  }
   if (lf > 0.85 && f < 0.15) {
-    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.cps = 0; c.cpI = (i + 3) % n; }
-    else if (c.cps === 7) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.cps = 0; c.cpI = (i + 3) % n; onLap(c, lt, now); }
+    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.ng = 0; c.cpI = (i + 3) % n; }
+    else if ((c.ng || 0) >= K) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.ng = 0; c.cpI = (i + 3) % n; onLap(c, lt, now); }
+    else if (c === G.me && c.lap >= 0 && now - (c.missT || 0) > 3000) { c.missT = now; pop('MISSED A CHECKPOINT', '#ff3b3b'); }
   }
   c.prog = i;
 }
 function onLap(c, lt, now) {
-  const r = rec(G.cfg.track); let pb = false; if (!r.lap || lt < r.lap) { r.lap = lt; pb = true; setRec(G.cfg.track, r); }
-  if (ACCT.lap(G.cfg.track, lt, c.score + c.cur)) pb = true; ACCT.stats.laps++; if (G.tt) G.tt.laps++;
+  let pb = false; if (!TRACKS[G.cfg.track].test) { const r = rec(G.cfg.track); if (!r.lap || lt < r.lap) { r.lap = lt; pb = true; setRec(G.cfg.track, r); }
+  if (ACCT.lap(G.cfg.track, lt, c.score + c.cur)) pb = true; } ACCT.stats.laps++; if (G.tt) G.tt.laps++;
   pop((G.cfg.laps && c.lap >= G.cfg.laps ? 'FINAL LAP ' : 'LAP ') + fmt(lt) + (pb ? '  ★ PB' : ''), pb ? '#7dff9a' : '#fff');
   if (G.cfg.laps && c.lap === G.cfg.laps - 1) setTimeout(() => pop('FINAL LAP!', '#ffe14d'), 700);
   if (G.cfg.laps && c.lap >= G.cfg.laps) finishMe(now);
@@ -132,11 +138,11 @@ function effects(dt) {
 // ===== Endless time trial: R restarts the lap, F returns to the last checkpoint, ESC ends the session =====
 function ttRestart() {
   const c = G.me, s = gridSlot(G.tr, 0); c.x = s.x; c.y = s.y; c.a = s.a; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.lap = -1; c.cps = 0; c.lapStart = 0; c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0;
-  c.hint = s.i; c.prog = s.i; c.seg = Math.floor(s.i / G.tr.n * 8); c.cpI = null; c.rwL = c.rwR = null; G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
+  c.hint = s.i; c.prog = s.i; c.seg = segOf(s.i); c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
 }
 function ttCheckpoint() {
   const c = G.me; if (c.cpI == null) return ttRestart();
-  const i = c.cpI, p = G.tr.pts[i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[i]; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.hint = i; c.prog = i; c.seg = Math.floor(i / G.tr.n * 8);
+  const i = c.cpI, p = G.tr.pts[i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[i]; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.hint = i; c.prog = i; c.seg = segOf(i); c.ng = Math.max(0, c.seg);
   c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0; c.rwL = c.rwR = null; pop('BACK TO CHECKPOINT', '#ffe14d');
 }
 function endTT() {

@@ -79,9 +79,11 @@
         <div class="stage"><canvas id="gPrev" width="440" height="300"></canvas><p id="gDesc"></p></div>
         <div class="gopts">
           <label>Driver name <input id="nameIn" maxlength="14"></label>
-          <label>Car colour</label><div id="colors"></div>
+          <label>Paint <small class="dim">· pick a swatch or type any hex code</small></label><div id="paints"></div>
+          <label>Finish</label><div class="row" id="finishes"></div>
           <label>Car type <small class="dim">· cosmetic, all cars handle the same</small></label><div id="types"></div>
-          <label>Livery</label><div class="row" id="livs"></div>
+          <label>Livery <small class="dim">· uses your stripe + secondary colours</small></label><div id="livs"></div>
+          <label>Race number <input id="numIn" maxlength="2" inputmode="numeric" placeholder="7" style="width:70px"></label>
         </div>
       </div>
     </section>

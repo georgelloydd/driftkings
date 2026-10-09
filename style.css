@@ -123,3 +123,17 @@ input:focus{border-color:var(--red)}
 .kb{min-width:120px;font-family:ui-monospace,monospace;font-weight:800}
 .kb.wait{background:#ff2a2a!important;color:#fff!important;border-color:#ff2a2a!important}
 @media (max-width:900px){.mpGrid,.mpGrid.set{grid-template-columns:1fr}}
+
+/* garage paint rows + livery tiles */
+#paints{display:grid;gap:8px}
+.prow{display:grid;grid-template-columns:96px 1fr auto auto;gap:8px;align-items:center;background:#0e0e10;border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.prow b{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:#bbb}
+.prow .sws{display:flex;gap:5px;flex-wrap:wrap}
+.prow .sw{width:20px;height:20px;border-width:2px}
+.prow input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer}
+.prow input.hex{width:86px;font-family:ui-monospace,Consolas,monospace;text-transform:uppercase}
+.prow input.hex.bad{border-color:var(--red);color:#ff8a8a}
+#livs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:7px}
+.lvt{background:#0e0e10;border:1px solid var(--line);border-radius:6px;cursor:pointer;text-align:center;font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase;padding-bottom:6px;color:#aaa}
+.lvt canvas{width:100%;display:block}.lvt.on{border-color:var(--red);background:rgba(255,42,42,.12);color:#fff}
+@media(max-width:700px){.prow{grid-template-columns:1fr auto auto}.prow b{grid-column:1/-1}}

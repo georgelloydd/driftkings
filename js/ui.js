@@ -5,17 +5,18 @@ function msg(id, t) { if (id === 'menuMsg') id = { mp: 'joinMsg' }[TAB] || 'ttMs
 function refreshMenu() {
   if (CFG.mode !== 'race' && CFG.mode !== 'drift') CFG.mode = 'race'; // host-room mode; time trial has its own tab
   $('nameIn').value = CFG.name;
-  document.querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s.dataset.c === CFG.color));
+  document.querySelectorAll('.prow').forEach(r => { const f = r.dataset.f, v = CFG[f]; r.querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s.dataset.c.toLowerCase() === String(v).toLowerCase())); const ci = r.querySelector('input[type=color]'), hi = r.querySelector('.hex'); ci.value = v; if (document.activeElement !== hi) { hi.value = v.toUpperCase(); hi.classList.remove('bad'); } });
+  document.querySelectorAll('[data-fin]').forEach(s => s.classList.toggle('on', s.dataset.fin === CFG.finish)); if (document.activeElement !== $('numIn')) $('numIn').value = CFG.num;
+  document.querySelectorAll('.lvt').forEach(s => { s.classList.toggle('on', s.dataset.lv === CFG.livery); drawCarPreview(s.querySelector('canvas'), Object.assign(carLook(CFG), { livery: s.dataset.lv }), -0.35); });
   document.querySelectorAll('.tk').forEach(s => s.classList.toggle('on', +s.dataset.t === CFG.track));
   document.querySelectorAll('[data-mode]').forEach(s => s.classList.toggle('on', s.dataset.mode === CFG.mode));
   document.querySelectorAll('[data-l]').forEach(s => s.classList.toggle('on', +s.dataset.l === CFG.laps));
-  document.querySelectorAll('.ty').forEach(s => { s.classList.toggle('on', s.dataset.b === CFG.body); drawCarPreview(s.querySelector('canvas'), s.dataset.b, CFG.color, CFG.livery, -0.35); });
-  document.querySelectorAll('[data-lv]').forEach(s => s.classList.toggle('on', s.dataset.lv === CFG.livery));
+  document.querySelectorAll('.ty').forEach(s => { s.classList.toggle('on', s.dataset.b === CFG.body); drawCarPreview(s.querySelector('canvas'), Object.assign(carLook(CFG), { body: s.dataset.b }), -0.35); });
   $('hostNet').textContent = netMode() === 'servers' ? 'Runs on the online servers: friends can join from any network.' : 'Peer-to-peer (no Supabase set up): works best when everyone is on the same wifi.';
   $('pubChk').disabled = netMode() !== 'servers'; $('pubRow').classList.toggle('dim', netMode() !== 'servers'); $('pubRow').title = netMode() === 'servers' ? '' : 'Needs Supabase set up';
   const r = rec(CFG.track); $('records').textContent = `Your records on ${TRACKS[CFG.track].name}: best lap ${fmt(ACCT.bestLap(CFG.track) || r.lap)} • best drift score ${(r.score || 0).toLocaleString()}`;
   const t = carType(CFG.body); $('gDesc').textContent = t.name.toUpperCase() + ' · ' + t.desc;
-  drawCarPreview($('gPrev'), CFG.body, CFG.color, CFG.livery, -0.5);
+  drawCarPreview($('gPrev'), carLook(CFG), -0.5);
   $('chip').querySelector('i').style.background = CFG.color; $('chip').querySelector('b').textContent = CFG.name; $('chip').querySelector('small').textContent = ACCT.key.slice(0, 8) + '-····-····';
   refreshAcct();
 }
@@ -51,10 +52,21 @@ function renderServers(list) {
 }
 function buildMenu() {
   document.querySelectorAll('.nv').forEach(b => b.onclick = () => setTab(b.dataset.tab)); $('chip').onclick = () => setTab('acct');
-  COLORS.forEach(c => { const s = document.createElement('div'); s.className = 'sw'; s.style.background = c; s.dataset.c = c; s.onclick = () => { CFG.color = c; saveCfg(); refreshMenu(); }; $('colors').appendChild(s); });
+  Object.assign(CFG, carLook(CFG));
+  const PAINT = [['color', 'Body', COLORS], ['accent', 'Stripes', ['#ffffff', '#111111', '#ffd400', '#ff2a2a', '#00e0ff', '#ff7a00', '#7bff4a', '#c04bff']], ['accent2', 'Secondary', ['#111111', '#ffffff', '#ff2a2a', '#ffd400', '#2b6bff', '#c0c0c0', '#00b37a', '#ff4fa3']], ['rim', 'Wheels', ['#c9ccd2', '#1a1a1c', '#d4a838', '#ffffff', '#ff2a2a', '#3a7bff', '#7a7f88', '#e0b98a']]];
+  for (const [f, label, sw] of PAINT) {
+    const r = document.createElement('div'); r.className = 'prow'; r.dataset.f = f; r.innerHTML = `<b>${label}</b><div class="sws"></div><input type="color" title="Colour picker"><input class="hex" maxlength="7" spellcheck="false" title="Hex code, e.g. #FF2A2A">`;
+    const set = v => { CFG[f] = v.toLowerCase(); saveCfg(); refreshMenu(); };
+    sw.forEach(c => { const s = document.createElement('div'); s.className = 'sw'; s.style.background = c; s.dataset.c = c; s.title = c.toUpperCase(); s.onclick = () => set(c); r.querySelector('.sws').appendChild(s); });
+    r.querySelector('input[type=color]').oninput = e => set(e.target.value);
+    const hi = r.querySelector('.hex'); hi.oninput = () => { let v = hi.value.trim(); if (!v.startsWith('#')) v = '#' + v; if (/^#[0-9a-f]{3}$/i.test(v)) v = '#' + [...v.slice(1)].map(x => x + x).join(''); const ok = /^#[0-9a-f]{6}$/i.test(v); hi.classList.toggle('bad', !ok); if (ok) set(v); };
+    hi.onblur = () => refreshMenu(); $('paints').appendChild(r);
+  }
+  FINISHES.forEach(([id, n]) => { const b = document.createElement('button'); b.className = 'opt'; b.dataset.fin = id; b.textContent = n; b.onclick = () => { CFG.finish = id; saveCfg(); refreshMenu(); }; $('finishes').appendChild(b); });
+  $('numIn').oninput = () => { CFG.num = $('numIn').value.replace(/\D/g, '').slice(0, 2); saveCfg(); refreshMenu(); };
   CAR_TYPES.forEach(t => { const d = document.createElement('div'); d.className = 'ty'; d.dataset.b = t.id; const c = document.createElement('canvas'); c.width = 120; c.height = 70; d.appendChild(c); d.appendChild(document.createTextNode(t.name)); d.onclick = () => { CFG.body = t.id; saveCfg(); refreshMenu(); }; $('types').appendChild(d); });
-  LIVERIES.forEach(l => { const b = document.createElement('button'); b.className = 'opt'; b.dataset.lv = l.id; b.textContent = l.name; b.onclick = () => { CFG.livery = l.id; saveCfg(); refreshMenu(); }; $('livs').appendChild(b); });
-  TRACKS.forEach((t, i) => { const d = document.createElement('div'); d.className = 'tk'; d.dataset.t = i; const c = document.createElement('canvas'); c.width = 200; c.height = 120; const g = c.getContext('2d'), tr = buildTrack(i, true), s = Math.min(180 / WORLD_W, 100 / WORLD_H);
+  LIVERIES.forEach(l => { const d = document.createElement('div'); d.className = 'lvt'; d.dataset.lv = l.id; const c = document.createElement('canvas'); c.width = 110; c.height = 64; d.appendChild(c); d.appendChild(document.createTextNode(l.name)); d.onclick = () => { CFG.livery = l.id; saveCfg(); refreshMenu(); }; $('livs').appendChild(d); });
+  TRACKS.forEach((t, i) => { if (t.test || t.hidden) return; const d = document.createElement('div'); d.className = 'tk'; d.dataset.t = i; const c = document.createElement('canvas'); c.width = 200; c.height = 120; const g = c.getContext('2d'), tr = buildTrack(i, true), s = Math.min(180 / WORLD_W, 100 / WORLD_H);
     g.fillStyle = '#0e0e10'; g.fillRect(0, 0, 200, 120); g.translate(10, 10); g.scale(s, s); g.lineJoin = 'round'; pathTrack(g, tr); g.strokeStyle = '#ff2a2a'; g.lineWidth = tr.w + 80; g.shadowColor = '#ff2a2a'; g.shadowBlur = 14; g.stroke(); g.shadowBlur = 0; g.strokeStyle = '#1c1c20'; g.lineWidth = tr.w + 10; g.stroke();
     const sp = document.createElement('span'); sp.textContent = t.name; d.appendChild(c); d.appendChild(sp); d.onclick = () => { CFG.track = i; saveCfg(); refreshMenu(); }; $('tracks').appendChild(d);
     const b = document.createElement('button'); b.className = 'opt'; b.dataset.lbt = i; b.textContent = t.name; b.onclick = () => { LBT = i; loadLB(); }; $('lbTracks').appendChild(b); });
@@ -103,7 +115,7 @@ function showLobby(d) {
   const c = d.cfg && d.cfg.track !== undefined ? d.cfg : emitCfg();
   if (NET.host) {
     $('lobbyCfg').innerHTML = `<div class="row"><button class="opt" id="lcT">🗺 ${TRACKS[c.track].name} ▸</button><button class="opt" id="lcL">🔁 ${c.laps ? c.laps + ' laps' : 'Free roam'} ▸</button><button class="opt" id="lcM">${c.mode === 'drift' ? '💨' : '🏁'} ${MODES[c.mode]} ▸</button></div>`;
-    $('lcT').onclick = () => { CFG.track = (CFG.track + 1) % TRACKS.length; saveCfg(); netLobby(); };
+    $('lcT').onclick = () => { let n = CFG.track; do n = (n + 1) % TRACKS.length; while ((TRACKS[n].test || TRACKS[n].hidden) && n !== CFG.track); CFG.track = n; saveCfg(); netLobby(); };
     $('lcL').onclick = () => { CFG.laps = { 1: 3, 3: 5, 5: 0, 0: 1 }[CFG.laps]; saveCfg(); netLobby(); };
     $('lcM').onclick = () => { CFG.mode = CFG.mode === 'race' ? 'drift' : 'race'; saveCfg(); netLobby(); };
     $('bStart').classList.remove('hidden'); $('bStart').textContent = G.plist.length > 1 ? `Start race (${G.plist.length} drivers)` : 'Start (waiting for friends…)';
@@ -152,7 +164,7 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { KEYS[e.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = false; });
 document.querySelectorAll('.nv').forEach(b => b.onclick = () => setTab(b.dataset.tab));
-ACCT.load().catch(e => console.warn(e)).then(() => { buildMenu(); if (typeof DEBUG_READY === 'function') DEBUG_READY(); }); requestAnimationFrame(tick);
+Promise.all([ACCT.load().catch(e => console.warn(e)), loadTracks()]).then(() => { buildMenu(); if (TEST_IDX >= 0) { CFG.track = TEST_IDX; startSession({ track: TEST_IDX, laps: 0, mode: 'tt' }, null, false); } if (typeof DEBUG_READY === 'function') DEBUG_READY(); }); requestAnimationFrame(tick);
 
 // ===== Settings: keybinds + graphics =====
 let BINDING = null;
@@ -176,3 +188,12 @@ function keysHint() {
 $('bBindReset').onclick = () => { CFG.keys = Object.assign({}, DEF_KEYS); BINDING = null; saveCfg(); renderBinds(); keysHint(); };
 $('bGfxReset').onclick = () => { CFG.gfx = Object.assign({}, DEF_GFX); applyGfx(); saveCfg(); renderGfx(); };
 keysHint();
+
+// Published tracks (tracks.json in the repo, written by /build) replace the built-in list; ?test=1 adds the builder's test track
+let TEST_IDX = -1;
+async function loadTracks() {
+  try { const r = await fetch('tracks.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) { const j = await r.json(); const L = (j.tracks || []).filter(t => t && Array.isArray(t.pts) && t.pts.length >= 4); if (L.length) TRACKS.splice(0, TRACKS.length, ...L); } } catch (e) { }
+  if (new URLSearchParams(location.search).has('test')) { try { const hp = new URLSearchParams(location.hash.slice(1)).get('track'); const d = hp ? JSON.parse(decodeURIComponent(escape(atob(hp)))) : JSON.parse(localStorage.getItem('md_test_track') || 'null'); if (d && Array.isArray(d.pts) && d.pts.length >= 4) { d.test = true; d.name = (d.name || 'Track') + ' (test)'; TRACKS.push(d); TEST_IDX = TRACKS.length - 1; } } catch (e) { } }
+  if (!(CFG.track >= 0 && CFG.track < TRACKS.length) || ((TRACKS[CFG.track].test || TRACKS[CFG.track].hidden) && CFG.track !== TEST_IDX)) CFG.track = Math.max(0, TRACKS.findIndex(t => !t.hidden && !t.test));
+  G.attract = null;
+}

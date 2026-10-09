@@ -24,7 +24,6 @@ function render(dt) {
   if (CFG.gfx.fps) { G.fps = (G.fps || 60) * 0.94 + (1 / Math.max(dt, 1e-3)) * 0.06; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.font = '700 12px monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(Math.round(G.fps) + ' FPS', 14, VH - 14); }
 }
 function drawGates(tr) {
-  if (!tr.gates) { tr.gates = []; for (let s = 1; s < 8; s++) tr.gates.push({ s, i: Math.floor(s * tr.n / 8) }); }
   const me = G.me, live = me && me.lap >= 0, nx = me ? (me.seg + 1) % 8 : -1, t = performance.now() / 1000, hw = tr.w / 2;
   ctx.save(); ctx.lineCap = 'round'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px Segoe UI, system-ui, sans-serif';
   for (const g of tr.gates) {
@@ -59,13 +58,13 @@ function buildMini() { const c = document.createElement('canvas'); c.width = 220
 function drawMini() {
   const m = $('mini').getContext('2d'); m.clearRect(0, 0, 220, 160); m.drawImage(MINI.c, 0, 0);
   const p0 = G.tr.pts[0]; m.fillStyle = '#fff'; m.fillRect(10 + p0[0] * MINI.s - 3, 10 + p0[1] * MINI.s - 3, 6, 6);
-  if (CFG.gfx.gates && G.tr.gates) { const nx = (G.me.seg + 1) % 8; for (const g of G.tr.gates) { const p = G.tr.pts[g.i]; m.fillStyle = g.s === nx && G.me.lap >= 0 ? '#ffd400' : 'rgba(255,42,42,.9)'; m.beginPath(); m.arc(10 + p[0] * MINI.s, 10 + p[1] * MINI.s, 3.2, 0, 7); m.fill(); } }
+  if (CFG.gfx.gates && G.tr.gates) { const nx = G.me.seg + 1; for (const g of G.tr.gates) { const p = G.tr.pts[g.i]; m.fillStyle = g.s === nx && G.me.lap >= 0 ? '#ffd400' : 'rgba(255,42,42,.9)'; m.beginPath(); m.arc(10 + p[0] * MINI.s, 10 + p[1] * MINI.s, 3.2, 0, 7); m.fill(); } }
   for (const c of [...[...G.rem.values()].map(r => r.car), G.me]) { m.fillStyle = c.color; m.strokeStyle = c === G.me ? '#fff' : '#000'; m.lineWidth = 2; m.beginPath(); m.arc(10 + c.x * MINI.s, 10 + c.y * MINI.s, c === G.me ? 6 : 5, 0, 7); m.fill(); m.stroke(); }
 }
 function renderAttract(dt) {
   if (!G.attract || G.attract.idx !== CFG.track) { G.attract = { idx: CFG.track, tr: buildTrack(CFG.track), i: 0 }; }
   const A = G.attract, tr = A.tr; A.i = (A.i + dt * 38) % tr.n; const i = Math.floor(A.i), p = tr.pts[i], d = tr.dirs[i], d2 = tr.dirs[(i + 25) % tr.n], turn = angDiff(d2, d);
-  const car = { x: p[0], y: p[1], a: d + Math.max(-0.7, Math.min(0.7, turn * 2.2)), steer: -Math.sign(turn) * 0.8, color: CFG.color, body: CFG.body, livery: CFG.livery, brake: false };
+  const car = { x: p[0], y: p[1], a: d + Math.max(-0.7, Math.min(0.7, turn * 2.2)), steer: -Math.sign(turn) * 0.8, brake: false, ...carLook(CFG) };
   const cam = { x: p[0], y: p[1], z: Math.min(VW, VH) / 1100, a: 0 };
   drawWorld(tr, cam, [car], false);
 }
