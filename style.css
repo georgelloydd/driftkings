@@ -153,3 +153,8 @@ input:focus{border-color:var(--red)}
 .dupBox p{color:#bbb;line-height:1.5;margin:0 0 20px}
 .dupBox small{display:block;margin-top:12px;color:#777;font-size:11px}
 #dupBtn{background:var(--red);color:#fff;border:0;border-radius:5px;padding:12px 22px;font-weight:900;font-style:italic;letter-spacing:1px;cursor:pointer;font-size:15px}
+
+#tab-mp .servers{max-height:none}
+.mpTop{margin:6px 0 18px}.mpTop .row{flex-wrap:wrap}.mpTop .sep{flex:1}
+
+#lobbyCfg label{display:block;margin:10px 0 4px}#lobbyCfg select{min-width:260px}#lobbyCfg .ro{line-height:1.7}

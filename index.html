@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mini Drifters</title>
-<link rel="stylesheet" href="style.css?v=20261009111441">
+<link rel="stylesheet" href="style.css?v=20261009114745">
 </head>
 <body>
 <canvas id="cv"></canvas>
@@ -47,27 +47,14 @@
     </section>
     <section class="tab hidden" id="tab-mp">
       <h1>MULTIPLAYER</h1><div class="bar"></div>
-      <div class="mpGrid">
-        <div class="mpc">
-          <h3>Host room</h3>
-          <label>Mode</label>
-          <div class="row"><button class="opt" data-mode="race">🏁 Race</button><button class="opt" data-mode="drift">💨 Drift battle</button></div>
-          <label>Track</label><div class="trackSlot"></div>
-          <label>Laps</label>
-          <div class="row" id="laps"><button class="opt" data-l="1">1</button><button class="opt" data-l="3">3</button><button class="opt" data-l="5">5</button><button class="opt" data-l="0">Free roam</button></div>
-          <label class="chk" id="pubRow"><input type="checkbox" id="pubChk" checked> Show room publicly</label>
-          <div class="row big"><button id="bHost" class="btn primary">▶ Host room</button></div>
-          <p id="hostMsg" class="msg"></p>
-          <p id="hostNet" class="hint"></p>
+      <div id="mpMain">
+        <div class="mpc mpTop">
+          <div class="row big"><input id="codeIn" maxlength="5" placeholder="ROOM CODE" autocomplete="off"><button id="bJoin" class="btn primary">Join</button><span class="sep"></span><button id="bHost" class="btn dark">+ Host room</button></div>
+          <p id="joinMsg" class="msg"></p><p id="hostMsg" class="msg"></p><p id="hostNet" class="hint"></p>
         </div>
-        <div class="mpc">
-          <h3>Enter code</h3>
-          <div class="row big"><input id="codeIn" maxlength="5" placeholder="ROOM CODE" autocomplete="off"><button id="bJoin" class="btn primary">Join</button></div>
-          <p id="joinMsg" class="msg"></p>
-        </div>
+        <label>Open rooms <span id="srvMode" class="dim"></span></label>
+        <div id="servers" class="servers"></div>
       </div>
-      <label>Open rooms <span id="srvMode" class="dim"></span></label>
-      <div id="servers" class="servers"></div>
     </section>
     <section class="tab hidden" id="tab-garage">
       <h1>GARAGE</h1><div class="bar"></div>
@@ -91,6 +78,12 @@
     </section>
     <section class="tab hidden" id="tab-acct">
       <h1>ACCOUNT</h1><div class="bar"></div>
+      <div class="card hidden" id="regBox">
+        <label>Create your account</label>
+        <p class="hint">You're playing as a guest. Create an account to host or join races and to get your times on the online leaderboards. Guest times only save on this device.</p>
+        <div class="row"><input id="regName" maxlength="14" placeholder="Driver name"><button class="btn primary sm" id="bReg">Create account</button></div>
+        <p id="regMsg" class="msg"></p>
+      </div>
       <div class="card">
         <label>Driver name</label>
         <div class="row"><input id="acctName" maxlength="14" placeholder="Your name"><button class="btn primary sm" id="bName">Save name</button></div>
@@ -130,6 +123,7 @@
   <p class="sub" id="lobbyHint">Send this code to your friends. They open the game and press <b>Join friend</b>.</p>
   <div class="panel">
     <div id="lobbyCfg"></div>
+    <label class="chk" id="pubRow"><input type="checkbox" id="pubChk" checked> Show room publicly in Open rooms</label>
     <ul id="plist"></ul>
     <div class="row big"><button id="bStart" class="btn primary">Start race</button><button id="bLeave" class="btn dark">Leave</button></div>
     <p id="lobbyMsg" class="msg"></p>
@@ -138,16 +132,16 @@
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/config.js?v=20261009111441"></script>
-<script src="js/track.js?v=20261009111441"></script>
-<script src="js/car.js?v=20261009111441"></script>
-<script src="js/cars.js?v=20261009111441"></script>
-<script src="js/net.js?v=20261009111441"></script>
-<script src="js/session.js?v=20261009111441"></script>
-<script src="js/audio.js?v=20261009111441"></script>
-<script src="js/main.js?v=20261009111441"></script>
-<script src="js/account.js?v=20261009111441"></script>
-<script src="js/render.js?v=20261009111441"></script>
-<script src="js/ui.js?v=20261009111441"></script>
+<script src="js/config.js?v=20261009114745"></script>
+<script src="js/track.js?v=20261009114745"></script>
+<script src="js/car.js?v=20261009114745"></script>
+<script src="js/cars.js?v=20261009114745"></script>
+<script src="js/net.js?v=20261009114745"></script>
+<script src="js/session.js?v=20261009114745"></script>
+<script src="js/audio.js?v=20261009114745"></script>
+<script src="js/main.js?v=20261009114745"></script>
+<script src="js/account.js?v=20261009114745"></script>
+<script src="js/render.js?v=20261009114745"></script>
+<script src="js/ui.js?v=20261009114745"></script>
 </body>
 </html>

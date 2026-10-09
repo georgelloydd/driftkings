@@ -11,7 +11,7 @@ async function sha(s) { const b = await crypto.subtle.digest('SHA-256', new Text
 function blankStats() { return { races: 0, wins: 0, laps: 0, sessions: 0, drift: 0, dist: 0, best: {} }; }
 
 const ACCT = {
-  key: '', stats: blankStats(), pub: '', priv: '',
+  key: '', stats: blankStats(), pub: '', priv: '', reg: false, // reg = created an account (guests only save on this device)
   async load() {
     let k = localStorage.getItem('md_key');
     if (!k || !validKey(k)) { k = newKey(); localStorage.setItem('md_key', k); }
@@ -24,15 +24,16 @@ const ACCT = {
     if (CLOUD && fetchCloud !== false) { try { const r = await sb('GET', 'profiles?id=eq.' + this.priv + '&select=data'); if (r && r[0]) data = r[0].data; } catch (e) { } }
     if (data) { this.stats = Object.assign(blankStats(), data.stats || {}); if (data.cfg) { Object.assign(CFG, data.cfg); } }
     else this.stats = blankStats();
-    this.save(true); if (CLOUD) { this.save(); syncBests(false); this.register(); LB.flush(); }
+    this.reg = !!(data && data.reg);
+    this.save(true); if (CLOUD && this.reg) { this.save(); syncBests(false); this.register(); LB.flush(); }
     return !!data;
   },
   // lets the admin dev site look up a forgotten key by player name (needs register_key from supabase-admin.sql; silently skipped if missing)
-  register() { if (CLOUD && this.key) sb('POST', 'rpc/register_key', { p_key: this.key, p_name: CFG.name }).catch(() => { }); },
-  data() { return { cfg: Object.assign({ name: CFG.name }, carLook(CFG)), stats: this.stats }; },
+  register() { if (CLOUD && this.key && this.reg) sb('POST', 'rpc/register_key', { p_key: this.key, p_name: CFG.name }).catch(() => { }); },
+  data() { return { cfg: Object.assign({ name: CFG.name }, carLook(CFG)), stats: this.stats, reg: this.reg }; },
   save(localOnly) {
     if (!this.key) return; localStorage.setItem('md_acct_' + this.key, JSON.stringify(this.data()));
-    if (CLOUD && !localOnly) { clearTimeout(this._t); this._t = setTimeout(() => sb('POST', 'profiles', { id: this.priv, data: this.data(), updated_at: new Date().toISOString() }, 'resolution=merge-duplicates,return=minimal').catch(() => { }), 800); }
+    if (CLOUD && this.reg && !localOnly) { clearTimeout(this._t); this._t = setTimeout(() => sb('POST', 'profiles', { id: this.priv, data: this.data(), updated_at: new Date().toISOString() }, 'resolution=merge-duplicates,return=minimal').catch(() => { }), 800); }
   },
   backup() { return 'MDB1.' + btoa(unescape(encodeURIComponent(JSON.stringify({ k: this.key, d: this.data() })))); },
   async restore(text) {
@@ -42,13 +43,20 @@ const ACCT = {
     const found = await this.use(k, true);
     return found ? 'Signed in.' : CLOUD ? 'No saved account for that key, so a fresh profile was started with it.' : 'That key has no profile on this device. Use a backup code to move an account between devices.';
   },
-  async create() { await this.use(newKey(), false); this.stats = blankStats(); this.save(); },
+  async create() { await this.use(newKey(), false); this.stats = blankStats(); this.reg = true; this.save(); this.register(); },
+  // turn the current guest profile into an account: from now on it syncs to Supabase and shows on the online leaderboards
+  async signUp(name) {
+    name = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 14); if (name.length < 2) throw new Error('Pick a driver name (2 to 14 characters).');
+    CFG.name = name; this.reg = true; this.save(); this.register();
+    if (CLOUD) { await syncBests(true); LB.flush(); return 'Account created! Your best laps are now on the online leaderboards. Copy your key below so you can sign in on other devices.'; }
+    return 'Account created! Copy your key below to keep it safe.';
+  },
   // ---- stats ----
   addSession(o) { const s = this.stats; s.sessions++; s.laps += o.laps || 0; s.drift += o.drift || 0; s.dist += o.dist || 0; if (o.race) s.races++; if (o.win) s.wins++; this.save(); },
   bestLap(tr) { return (this.stats.best[tr] || {}).lap || 0; },
   async rename(name) {
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k.startsWith('md_lb_')) continue; const L = JSON.parse(localStorage.getItem(k) || '[]'); L.forEach(x => { if (x.pid === this.pub) x.name = name; }); localStorage.setItem(k, JSON.stringify(L)); }
-    if (!CLOUD) return 'Name saved.';
+    if (!CLOUD || !this.reg) return 'Name saved.';
     try { await sb('POST', 'rpc/rename_player', { p_key: this.key, p_name: name }); this.register(); return 'Name saved and updated on the online leaderboards.'; }
     catch (e) { return /404|PGRST202|rename_player/.test(e.message) ? 'Name saved. Old online leaderboard times keep the old name until you run the rename_player SQL from the README.' : 'Name saved here, but the online update failed: ' + e.message; }
   },
@@ -68,16 +76,27 @@ async function sb(method, path, body, prefer) {
 async function testOnline() {
   if (!CLOUD) return { ok: false, msg: 'Online is off: js/config.js has no SUPABASE_URL / SUPABASE_ANON_KEY on this deployed site.' };
   const steps = [];
-  try { await sb('GET', 'laps?select=id&limit=1'); steps.push('✓ read laps'); } catch (e) { return { ok: false, msg: e.message }; }
+  try { await sb('GET', 'laps?select=id&limit=1'); steps.push('✓ read laps'); if (!ACCT.reg) return { ok: true, msg: steps.join(' ') + ' · you are a guest: create an account to save online' }; } catch (e) { return { ok: false, msg: e.message }; }
   try { await sb('POST', 'profiles', { id: ACCT.priv, data: ACCT.data(), updated_at: new Date().toISOString() }, 'resolution=merge-duplicates,return=minimal'); steps.push('✓ save profile'); } catch (e) { return { ok: false, msg: steps.join(' ') + ' ✗ ' + e.message }; }
   const n = await syncBests(true); steps.push(`✓ uploaded ${n} best lap${n === 1 ? '' : 's'}`);
   return { ok: true, msg: steps.join(' · ') };
 }
+// one row per player per track: the submit_lap function only replaces it when the new lap is faster.
+// Falls back to a plain insert if the upgrade SQL hasn't been run yet.
+async function submitLap(tr, e) {
+  const r = { p_track: +tr, p_pid: e.pid || ACCT.pub, p_name: CFG.name, p_color: CFG.color, p_body: CFG.body, p_lap_ms: Math.round(e.lap), p_score: Math.round(e.score || 0) };
+  const perm = er => { const m = /\((\d{3})\)/.exec(er.message), s = m ? +m[1] : 0; if (s >= 400 && s < 500 && s !== 408 && s !== 429) er.perm = true; return er; };
+  try { await sb('POST', 'rpc/submit_lap', r); }
+  catch (er) { if (!/\(404\)|PGRST202/.test(er.message)) throw perm(er);
+    // old database without submit_lap: plain insert (a duplicate means the server already has a time for us)
+    try { await sb('POST', 'laps', { track: r.p_track, pid: r.p_pid, name: r.p_name, color: r.p_color, body: r.p_body, lap_ms: r.p_lap_ms, score: r.p_score }); }
+    catch (e2) { if (/\(409\)|23505/.test(e2.message)) { const x = new Error('Run the latest admin SQL in Supabase so faster laps can replace old ones.'); x.perm = true; throw x; } throw perm(e2); } }
+}
 // push every local best lap up once, so laps set before Supabase was configured still appear
 async function syncBests(force) {
-  if (!CLOUD) return 0; let n = 0; const done = JSON.parse(localStorage.getItem('md_synced_' + ACCT.key) || '{}');
+  if (!CLOUD || !ACCT.reg) return 0; let n = 0; const done = JSON.parse(localStorage.getItem('md_synced_' + ACCT.key) || '{}');
   for (const tr in ACCT.stats.best) { const lap = ACCT.stats.best[tr].lap; if (!lap || (!force && done[tr] === lap)) continue;
-    try { await sb('POST', 'laps', { track: +tr, pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap_ms: Math.round(lap), score: 0 }); done[tr] = lap; n++; } catch (e) { break; } }
+    try { await submitLap(tr, { pid: ACCT.pub, lap, score: 0 }); done[tr] = lap; n++; } catch (e) { break; } }
   localStorage.setItem('md_synced_' + ACCT.key, JSON.stringify(done)); return n;
 }
 const LB = {
@@ -86,33 +105,36 @@ const LB = {
     const e = { pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap: Math.round(ms), score: Math.round(score || 0), at: Date.now() };
     let L = this.localGet(tr).filter(x => x.pid !== e.pid || x.lap < e.lap); if (!L.some(x => x.pid === e.pid)) L.push(e);
     L.sort((a, b) => a.lap - b.lap); localStorage.setItem('md_lb_' + tr, JSON.stringify(L.slice(0, 50)));
-    if (CLOUD) this.queue(tr, e);
+    if (CLOUD && ACCT.reg) this.queue(tr, e); // guests: this device only, never sent to Supabase
   },
+  rej() { return JSON.parse(localStorage.getItem('md_rej_' + ACCT.key) || '{}'); },
   pend() { return JSON.parse(localStorage.getItem('md_pending_' + ACCT.key) || '{}'); },
   queue(tr, e) { const P = this.pend(); if (!P[tr] || e.lap < P[tr].lap) P[tr] = e; localStorage.setItem('md_pending_' + ACCT.key, JSON.stringify(P)); this.flush(); },
   async flush() {
-    if (!CLOUD || this.busy) return; this.busy = true; clearTimeout(this.rt); let okAny = false, failed = false;
+    if (!CLOUD || !ACCT.reg || this.busy) return; this.busy = true; clearTimeout(this.rt); let okAny = false, failed = false;
     try { const P = this.pend();
       for (const tr in P) { const e = P[tr];
-        try { await sb('POST', 'laps', { track: +tr, pid: e.pid, name: CFG.name, color: CFG.color, body: CFG.body, lap_ms: e.lap, score: e.score || 0 });
+        try { await submitLap(tr, e);
           const Q = this.pend(); if (Q[tr] && Q[tr].lap === e.lap) delete Q[tr]; localStorage.setItem('md_pending_' + ACCT.key, JSON.stringify(Q));
           const done = JSON.parse(localStorage.getItem('md_synced_' + ACCT.key) || '{}'); done[tr] = e.lap; localStorage.setItem('md_synced_' + ACCT.key, JSON.stringify(done)); okAny = true; }
-        catch (er) { failed = true; } }
+        catch (er) { if (er.perm) { const Q = this.pend(); delete Q[tr]; localStorage.setItem('md_pending_' + ACCT.key, JSON.stringify(Q)); const rj = this.rej(); rj[tr] = { lap: Math.round(e.lap), why: er.message }; localStorage.setItem('md_rej_' + ACCT.key, JSON.stringify(rj)); okAny = true; console.warn('[Supabase] lap rejected', er.message); }
+          else failed = true; } }
     } finally { this.busy = false; }
     if (failed) { if (!this.warned && typeof pop === 'function' && G.state !== 'menu') { this.warned = true; pop('LAP NOT UPLOADED YET · RETRYING', '#ff9a2a'); } this.rt = setTimeout(() => this.flush(), 15000); }
     else this.warned = false;
-    if (okAny && typeof TAB !== 'undefined' && TAB === 'lb' && typeof loadLB === 'function') loadLB();
+    if (okAny && typeof TAB !== 'undefined' && TAB === 'lb' && typeof loadLB === 'function' && G.state === 'menu') loadLB();
     if (Object.keys(this.pend()).length && !failed) this.flush();
   },
   async top(tr) {
     if (!CLOUD) return { live: false, rows: this.localGet(tr).slice(0, 10) };
     try {
-      const r = await sb('GET', `laps?track=eq.${tr}&select=pid,name,color,body,lap_ms,score,created_at&order=lap_ms.asc&limit=200`);
+      const r = await sb('GET', `laps?track=eq.${tr}&select=pid,name,color,body,lap_ms,score,created_at&order=lap_ms.asc&limit=100`);
       const seen = new Set(), rows = []; for (const x of r) { if (seen.has(x.pid)) continue; seen.add(x.pid); rows.push({ pid: x.pid, name: x.name, color: x.color, body: x.body, lap: x.lap_ms, score: x.score, at: Date.parse(x.created_at) }); }
       const mine = Math.round(ACCT.bestLap(tr)), P = this.pend(), srv = rows.find(x => x.pid === ACCT.pub);
-      if (mine && !TRACKS[tr].test && (!srv || mine < srv.lap) && (r.length < 200 || mine <= r[r.length - 1].lap_ms)) {
-        if (!P[tr]) this.queue(tr, { pid: ACCT.pub, lap: mine, score: 0 });
-        const me = { pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap: mine, at: Date.now(), pending: true };
+      if (ACCT.reg && mine && !TRACKS[tr].test && (!srv || mine < srv.lap) && (r.length < 100 || mine <= r[r.length - 1].lap_ms)) {
+        const rj = this.rej()[tr], bad = rj && rj.lap === mine;
+        if (!P[tr] && !bad) this.queue(tr, { pid: ACCT.pub, lap: mine, score: 0 });
+        const me = { pid: ACCT.pub, name: CFG.name, color: CFG.color, body: CFG.body, lap: mine, at: Date.now(), pending: !bad, failed: bad ? rj.why : '' };
         const i = rows.indexOf(srv); if (i >= 0) rows.splice(i, 1); rows.push(me); rows.sort((a, b) => a.lap - b.lap); }
       return { live: true, rows: rows.slice(0, 10) };
     } catch (e) { return { live: false, err: true, rows: this.localGet(tr).slice(0, 10) }; }
