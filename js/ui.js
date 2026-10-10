@@ -166,7 +166,7 @@ addEventListener('keydown', e => {
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) || (k === B.hb && G.state !== 'menu')) e.preventDefault();
   if (G.state === 'race' && G.me) {
     if (k === B.reset && !e.repeat) { if (G.tt) ttRestart(); else resetCar(G.me); }
-    if (k === B.cp && !e.repeat) { if (G.tt) ttCheckpoint(); else resetCar(G.me); }
+    if (k === B.cp && !e.repeat) { if (G.tt) ttCheckpoint(); else raceCheckpoint(); }
   }
   if (k === B.cam && !e.repeat) { G.rot = !G.rot; pop(G.rot ? 'Chase camera' : 'Top-down camera'); }
   if (k === B.mute && !e.repeat) pop(sndMute() ? 'Sound off' : 'Sound on');
@@ -274,7 +274,7 @@ const TOUCH = { up: 0, down: 0, left: 0, right: 0, hb: 0 };
   });
   d.querySelectorAll('[data-a]').forEach(b => b.addEventListener('pointerdown', e => {
     e.preventDefault(); const a = b.dataset.a; if (a === 'esc') return handleEsc(); if (G.state !== 'race' || !G.me) return;
-    if (a === 'reset') { if (G.tt) ttRestart(); else resetCar(G.me); } else { if (G.tt) ttCheckpoint(); else resetCar(G.me); }
+    if (a === 'reset') { if (G.tt) ttRestart(); else resetCar(G.me); } else { if (G.tt) ttCheckpoint(); else raceCheckpoint(); }
   }));
   d.addEventListener('contextmenu', e => e.preventDefault());
   const mark = () => body.classList.add('touch');

@@ -44,7 +44,7 @@ function startSession(cfg, grid, mp, rid) {
 function segOf(i) { const g = G.tr.gates; let s = 0; while (s < g.length && g[s].i <= i) s++; return s; }
 function progress(c, i, now) {
   const n = G.tr.n, f = i / n, lf = c.prog / n, K = G.tr.gates.length;
-  if (c.seg === undefined) c.seg = 0; c.gp = [];
+  if (c.seg === undefined) c.seg = 0; if (!c.gp) c.gp = [];
   if (lf > 0.85 && f < 0.15) {
     if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.ng = 0; c.seg = 0; c.gp = []; c.cpI = (i + 3) % n; }
     else if ((c.ng || 0) >= K) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.ng = 0; c.seg = 0; c.gp = []; c.cpI = (i + 3) % n; onLap(c, lt, now); }
@@ -145,6 +145,11 @@ function effects(dt) {
 }
 
 // ===== Endless time trial: R restarts the lap, F returns to the last checkpoint, ESC ends the session =====
+function raceCheckpoint() {
+  const c = G.me; if (c.cpI == null) return resetCar(c);
+  const i = c.cpI, p = G.tr.pts[i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[i]; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.hint = i; c.prog = i;
+  c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0; c.rwL = c.rwR = null; pop('BACK TO CHECKPOINT', '#ffe14d');
+}
 function ttRestart() {
   const c = G.me, s = gridSlot(G.tr, 0); c.x = s.x; c.y = s.y; c.a = s.a; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.lap = -1; c.cps = 0; c.lapStart = 0; c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0;
   c.hint = s.i; c.prog = s.i; c.seg = 0; c.gp = []; c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; applySpawn(c); G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
