@@ -138,7 +138,7 @@ function effects(dt) {
   for (const c of [G.me, ...[...G.rem.values()].map(r => r.car)]) {
     const sliding = (c.drift || c.hb || (c.brake && c.speed > 500)) && c.speed > 120;
     if (sliding) { const w = wheelPos(c); if (c.rwL && CFG.gfx.skids) { skidSeg(c.rwL, w[0], snow); skidSeg(c.rwR, w[1], snow); } c.rwL = w[0]; c.rwR = w[1];
-      if (CFG.gfx.smoke && G.smoke.length < 450) for (const p of w) if (Math.random() < 0.8) G.smoke.push({ x: p[0], y: p[1], vx: (Math.random() - 0.5) * 40 - c.vx * 0.05, vy: (Math.random() - 0.5) * 40 - c.vy * 0.05, r: 8, life: 0, max: 0.9 + Math.random() * 0.8 }); }
+      if (CFG.gfx.smoke && G.smoke.length < 140) for (const p of w) if (Math.random() < 0.3) G.smoke.push({ x: p[0], y: p[1], vx: (Math.random() - 0.5) * 40 - c.vx * 0.05, vy: (Math.random() - 0.5) * 40 - c.vy * 0.05, r: 12, life: 0, max: 0.8 + Math.random() * 0.6 }); }
     else c.rwL = c.rwR = null;
   }
   G.smoke = G.smoke.filter(p => (p.life += dt) < p.max); for (const p of G.smoke) { p.x += p.vx * dt; p.y += p.vy * dt; p.r += 38 * dt; }

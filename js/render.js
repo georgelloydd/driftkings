@@ -11,7 +11,7 @@ function drawWorld(tr, cam, cars, rot) {
   if (tT > 0.01 && sw > 0) { ctx.fillStyle = `rgba(2,3,12,${0.58 * tT})`; ctx.fillRect(sx, sy, sw, sh); }
   drawTunnelFloor(ctx, tr);
   if (CFG.gfx.gates && G.state !== 'menu' && G.state !== 'lobby') drawGates(tr);
-  for (const p of G.smoke) { const a = (1 - p.life / p.max) * 0.32; ctx.fillStyle = night ? `rgba(170,180,230,${a})` : `rgba(238,238,242,${a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill(); }
+  if (G.smoke.length) { const sp = puffSprite(night); for (const p of G.smoke) { if (p.x + p.r < sx || p.y + p.r < sy || p.x - p.r > sx + sw || p.y - p.r > sy + sh) continue; ctx.globalAlpha = (1 - p.life / p.max) * 0.55; ctx.drawImage(sp, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2); } ctx.globalAlpha = 1; }
   const dc = c => { if (c.finished && (G.state === 'race' || G.state === 'countdown' || G.state === 'over')) { drawFaded(c); } else drawCar(ctx, c, night); };
   const hi = []; for (const c of cars) { if (carLayer(tr, c) === 1) hi.push(c); else dc(c); }
   drawTunnelRoof(ctx, tr, 0.9 - 0.75 * tT); drawBridges(ctx, tr); hi.forEach(dc);
@@ -108,4 +108,12 @@ function drawFaded(c) {
   if (!s) { const K = 3, c2 = document.createElement('canvas'); c2.width = 200 * K; c2.height = 120 * K; const g = c2.getContext('2d'); g.scale(K, K); g.translate(100, 60);
     drawCar(g, Object.assign({}, c, { x: 0, y: 0, a: 0, steer: 0, brake: false, hb: false, drift: false, thr: false }), false); s = c2; if (FADED.size > 30) FADED.clear(); FADED.set(key, s); }
   ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.a); ctx.globalAlpha = 0.38; ctx.drawImage(s, -100, -60, 200, 120); ctx.restore();
+}
+
+// soft smoke puff, drawn once
+const PUFF = {};
+function puffSprite(night) {
+  const k = night ? 'n' : 'd'; if (PUFF[k]) return PUFF[k];
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32), col = night ? '170,180,230' : '238,238,242';
+  gr.addColorStop(0, `rgba(${col},1)`); gr.addColorStop(0.55, `rgba(${col},.75)`); gr.addColorStop(1, `rgba(${col},0)`); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return PUFF[k] = c;
 }
