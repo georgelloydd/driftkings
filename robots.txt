@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://georgelloydd.github.io/minidrifters/sitemap.xml

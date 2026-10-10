@@ -5,7 +5,7 @@ let VW = 0, VH = 0, DPR = 1;
 function resize() { DPR = Math.min(window.GFX_SCALE || 2, devicePixelRatio || 1); VW = innerWidth; VH = innerHeight; cv.width = VW * DPR; cv.height = VH * DPR; }
 addEventListener('resize', resize); resize();
 const COLORS = ['#ff3b3b', '#ff8c1a', '#ffd60a', '#2ecc71', '#1ec8ff', '#3d6bff', '#a24dff', '#ff3fb4', '#f2f2f2', '#33363d'];
-const CFG = Object.assign({ name: 'Driver' + Math.floor(Math.random() * 900 + 100), color: COLORS[Math.floor(Math.random() * 8)], track: 0, mode: 'tt', laps: 3, body: 'drift', livery: 'stripes', accent: '#ffffff', accent2: '#111111', rim: '#c9ccd2', finish: 'gloss', num: '7' }, JSON.parse(localStorage.getItem('md_cfg') || '{}'));
+const CFG = Object.assign({ name: 'Driver', color: COLORS[Math.floor(Math.random() * 8)], track: 0, mode: 'tt', laps: 3, body: 'drift', livery: 'stripes', accent: '#ffffff', accent2: '#111111', rim: '#c9ccd2', finish: 'gloss', num: '7' }, JSON.parse(localStorage.getItem('md_cfg') || '{}'));
 function saveCfg() { localStorage.setItem('md_cfg', JSON.stringify(CFG)); if (typeof ACCT !== 'undefined') ACCT.save(); }
 const DEF_KEYS = { up: 'w', down: 's', left: 'a', right: 'd', hb: ' ', reset: 'r', cp: 'f', cam: 'c', mute: 'm' };
 const DEF_GFX = { res: 'sharp', smoke: 1, skids: 1, weather: 1, vignette: 1, gates: 1, fps: 0 };
@@ -44,11 +44,11 @@ function startSession(cfg, grid, mp, rid) {
 function segOf(i) { const g = G.tr.gates; let s = 0; while (s < g.length && g[s].i <= i) s++; return s; }
 function progress(c, i, now) {
   const n = G.tr.n, f = i / n, lf = c.prog / n, K = G.tr.gates.length;
-  if (c.seg === undefined) c.seg = 0;
+  if (c.seg === undefined) c.seg = 0; c.gp = [];
   if (lf > 0.85 && f < 0.15) {
-    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.ng = 0; c.seg = 0; c.cpI = (i + 3) % n; }
-    else if ((c.ng || 0) >= K) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.ng = 0; c.seg = 0; c.cpI = (i + 3) % n; onLap(c, lt, now); }
-    else if (c.lap >= 0) { const miss = (c.ng || 0) + 1; if ((c.seg || 0) > 0 && c === G.me && now - (c.missT || 0) > 1500) { c.missT = now; pop('LAP NOT COUNTED · MISSED CHECKPOINT ' + Math.min(K, miss), '#ff3b3b'); } c.ng = 0; c.seg = 0; c.lapStart = now; c.cpI = (i + 3) % n; if (c === G.me) { G.curSplits = []; } }
+    if (c.lap < 0) { c.lap = 0; c.lapStart = now; c.ng = 0; c.seg = 0; c.gp = []; c.cpI = (i + 3) % n; }
+    else if ((c.ng || 0) >= K) { const lt = now - c.lapStart; c.lap++; c.lapStart = now; c.lastLap = lt; if (!c.best || lt < c.best) c.best = lt; c.ng = 0; c.seg = 0; c.gp = []; c.cpI = (i + 3) % n; onLap(c, lt, now); }
+    else if (c.lap >= 0) { const miss = (c.ng || 0) + 1; if ((c.seg || 0) > 0 && c === G.me && now - (c.missT || 0) > 1500) { c.missT = now; pop('LAP NOT COUNTED · MISSED CHECKPOINT ' + Math.min(K, miss), '#ff3b3b'); } c.ng = 0; c.seg = 0; c.gp = []; c.lapStart = now; c.cpI = (i + 3) % n; if (c === G.me) { G.curSplits = []; } }
   }
   c.prog = i;
 }
@@ -97,7 +97,7 @@ function applyState(id, s) {
   r.tgt = { x: s[0], y: s[1], a: s[2], vx: s[3], vy: s[4], t: now }; bufState(r, s, now); c.steer = s[5]; c.drift = !!(s[6] & 1); c.brake = !!(s[6] & 2); c.hb = !!(s[6] & 4); c.lap = s[7]; c.prog = s[8]; c.score = s[9]; c.finished = s[10];
 }
 function resetCar(c) { const nr = nearestFull(G.tr, c.x, c.y), p = G.tr.pts[nr.i]; c.x = p[0]; c.y = p[1]; c.a = G.tr.dirs[nr.i]; c.vx = c.vy = 0; c.hint = nr.i; c.cur = 0; c.drift = false; }
-function inputs() { const k = KEYS, B = CFG.keys; return { up: k[B.up] || k.arrowup, down: k[B.down] || k.arrowdown, left: k[B.left] || k.arrowleft, right: k[B.right] || k.arrowright, hb: k[B.hb] }; }
+function inputs() { const k = KEYS, B = CFG.keys, T = typeof TOUCH !== 'undefined' ? TOUCH : {}; return { up: k[B.up] || k.arrowup || !!T.up, down: k[B.down] || k.arrowdown || !!T.down, left: k[B.left] || k.arrowleft || !!T.left, right: k[B.right] || k.arrowright || !!T.right, hb: k[B.hb] || !!T.hb }; }
 
 const STEP = 1 / 120;
 function tick(ts, bg) { try { tickInner(ts, bg); } catch (e) { reportErr(e); if (!bg) requestAnimationFrame(tick); } }
@@ -147,7 +147,7 @@ function effects(dt) {
 // ===== Endless time trial: R restarts the lap, F returns to the last checkpoint, ESC ends the session =====
 function ttRestart() {
   const c = G.me, s = gridSlot(G.tr, 0); c.x = s.x; c.y = s.y; c.a = s.a; c.vx = c.vy = 0; c.steer = 0; c.speed = 0; c.lap = -1; c.cps = 0; c.lapStart = 0; c.cur = 0; c.combo = 1; c.comboT = 0; c.drift = false; c.wrong = 0;
-  c.hint = s.i; c.prog = s.i; c.seg = 0; c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; applySpawn(c); G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
+  c.hint = s.i; c.prog = s.i; c.seg = 0; c.gp = []; c.ng = 0; c.cpI = null; c.rwL = c.rwR = null; applySpawn(c); G.tt.restarts++; pop('LAP RESTARTED', '#ff3b3b');
 }
 function ttCheckpoint() {
   const c = G.me; if (c.cpI == null) return ttRestart();
@@ -170,7 +170,7 @@ function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { co
 function applySpawn(c) {
   const sp = trackDef(G.cfg.track).spawn; if (!sp || !finPt(sp.p)) return false;
   const x = sp.p[0] * G.tr.W, y = sp.p[1] * G.tr.H, r = nearestFull(G.tr, x, y);
-  c.x = x; c.y = y; c.a = G.tr.dirs[r.i]; c.vx = c.vy = 0; c.hint = r.i; c.prog = r.i; c.seg = 0; c.ng = 0; return true;
+  c.x = x; c.y = y; c.a = G.tr.dirs[r.i]; c.vx = c.vy = 0; c.hint = r.i; c.prog = r.i; c.seg = 0; c.gp = []; c.ng = 0; return true;
 }
 // ---------- ghosts ----------
 function setGhost(rep, pick) {
@@ -230,12 +230,18 @@ function interpRemote(r, c, now) {
 // Forced checkpoints: the NEXT gate only counts if the car actually drives through its line
 // (between the track edges, going the right way). Cutting the track or going round a gate on the run-off doesn't count.
 function gateCross(c, ox, oy, now) {
-  if (c.lap < 0) return; const g = G.tr.gates, K = g.length, k = c.seg || 0; if (k >= K) return;
-  const q = g[k], p = G.tr.pts[q.i], a = G.tr.dirs[q.i], fx = Math.cos(a), fy = Math.sin(a);
-  const s0 = (ox - p[0]) * fx + (oy - p[1]) * fy, s1 = (c.x - p[0]) * fx + (c.y - p[1]) * fy;
-  if (!(s0 < 0 && s1 >= 0)) return;
-  const t = s0 / (s0 - s1), lx = ox + (c.x - ox) * t - p[0], ly = oy + (c.y - oy) * t - p[1], lat = -lx * fy + ly * fx;
-  if (Math.abs(lat) > G.tr.w / 2 + 8) return;
-  c.seg = k + 1; c.ng = c.seg; c.cpI = (q.i + 3) % G.tr.n;
-  if (c === G.me) { if (G.tt) G.tt.cps++; pop('CHECKPOINT ' + c.seg + ' / ' + K, '#ffd400'); splitAt(k, now - c.lapStart); }
+  // any gate, either direction; each gate counts once per lap (c.gp = gates passed this lap)
+  if (c.lap < 0) return; const g = G.tr.gates, K = g.length; if (!c.gp) c.gp = [];
+  for (let k = 0; k < K; k++) {
+    if (c.gp[k]) continue;
+    const q = g[k], p = G.tr.pts[q.i], a = G.tr.dirs[q.i], fx = Math.cos(a), fy = Math.sin(a);
+    const s0 = (ox - p[0]) * fx + (oy - p[1]) * fy, s1 = (c.x - p[0]) * fx + (c.y - p[1]) * fy;
+    if (!((s0 < 0 && s1 >= 0) || (s0 > 0 && s1 <= 0))) continue;
+    const t = s0 / (s0 - s1), lx = ox + (c.x - ox) * t - p[0], ly = oy + (c.y - oy) * t - p[1], lat = -lx * fy + ly * fx;
+    if (Math.abs(lat) > G.tr.w / 2 + 8) continue;
+    c.gp[k] = true; c.seg = c.gp.filter(Boolean).length; c.ng = c.seg; c.cpI = (q.i + 3) % G.tr.n;
+    if (c === G.me) { if (G.tt) G.tt.cps++; pop('CHECKPOINT ' + c.seg + ' / ' + K, '#ffd400'); splitAt(k, now - c.lapStart); }
+  }
 }
+// index of the first gate not yet passed this lap (the one highlighted yellow)
+function nextGate(c) { const K = G.tr.gates.length, gp = (c && c.gp) || []; for (let k = 0; k < K; k++) if (!gp[k]) return k; return -1; }

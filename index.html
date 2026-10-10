@@ -2,9 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mini Drifters</title>
-<link rel="stylesheet" href="style.css?v=20261009181542">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Mini Drifters · Top-down drift racer</title>
+<meta name="description" content="Mini Drifters: a free top-down drift racing game in your browser. Set time trial laps, race friends online and climb the global leaderboards.">
+<link rel="canonical" href="https://georgelloydd.github.io/minidrifters/">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#0a0a0c">
+<meta property="og:title" content="Mini Drifters">
+<meta property="og:description" content="A free top-down drift racing game in your browser.">
+<meta property="og:image" content="https://georgelloydd.github.io/minidrifters/icon-512.png">
+<link rel="stylesheet" href="style.css?v=20261010092918">
 </head>
 <body>
 <canvas id="cv"></canvas>
@@ -61,7 +74,7 @@
       <div class="garage">
         <div class="stage"><canvas id="gPrev" width="440" height="300"></canvas><p id="gDesc"></p></div>
         <div class="gopts">
-          <label>Driver name <input id="nameIn" maxlength="14"></label>
+          <label>Driver name <input id="nameIn" maxlength="14" readonly title="Change your name in Account" style="cursor:pointer"></label>
           <label>Paint <small class="dim">· pick a swatch or type any hex code</small></label><div id="paints"></div>
           <label>Finish</label><div class="row" id="finishes"></div>
           <label>Car type <small class="dim">· cosmetic, all cars handle the same</small></label><div id="types"></div>
@@ -78,29 +91,42 @@
     </section>
     <section class="tab hidden" id="tab-acct">
       <h1>ACCOUNT</h1><div class="bar"></div>
-      <div class="card hidden" id="regBox">
-        <label>Create your account</label>
-        <p class="hint">You're playing as a guest. Create an account to host or join races and to get your times on the online leaderboards. Guest times only save on this device.</p>
-        <div class="row"><input id="regName" maxlength="14" placeholder="Driver name"><button class="btn primary sm" id="bReg">Create account</button></div>
-        <p id="regMsg" class="msg"></p>
+      <div id="acctOut" class="hidden">
+        <div class="card" id="regBox">
+          <label>Create account</label>
+          <p class="hint">You're playing as a guest (<b>Driver</b>). Create an account to pick your own name, host or join races and get your times on the online leaderboards. Guest times only save on this device.</p>
+          <div class="row"><input id="regName" maxlength="14" placeholder="Choose a driver name"><button class="btn primary sm" id="bReg">Create account</button></div>
+          <p id="regMsg" class="msg"></p>
+        </div>
+        <div class="card">
+          <label>Already have an account? Sign in</label>
+          <div class="row"><input id="keyIn" placeholder="MD-XXXX-XXXX-XXXX or backup code"><button class="btn dark sm" id="bSignIn">Sign in</button></div>
+          <p class="hint">Paste your account key, or a backup code from another device.</p>
+          <p id="signMsg" class="msg"></p>
+        </div>
       </div>
-      <div class="card">
-        <label>Driver name</label>
-        <div class="row"><input id="acctName" maxlength="14" placeholder="Your name"><button class="btn primary sm" id="bName">Save name</button></div>
-        <p class="hint">Shown in races, rooms and on the leaderboards. Changing it updates your existing leaderboard times too.</p>
-        <p id="nameMsg" class="msg"></p>
-      </div>
-      <div class="card">
-        <label>Your account key</label>
-        <div class="row"><input id="keyOut" readonly><button class="btn dark sm" id="bReveal">Show</button><button class="btn dark sm" id="bCopyKey">Copy</button></div>
-        <p class="hint" id="keyHint"></p>
-        <div id="stats" class="stats"></div>
-      </div>
-      <div class="card">
-        <label>Sign in with a key or restore a backup code</label>
-        <div class="row"><input id="keyIn" placeholder="MD-XXXX-XXXX-XXXX or MDB1.…"><button class="btn primary sm" id="bSignIn">Sign in</button></div>
-        <div class="row big"><button class="btn dark sm" id="bBackup">Copy backup code</button><button class="btn dark sm" id="bNew">New account</button></div>
-        <p id="acctMsg" class="msg"></p>
+      <div id="acctIn" class="hidden">
+        <div class="card">
+          <label>Change name</label>
+          <div class="row"><input id="acctName" maxlength="14" placeholder="Your name"><button class="btn primary sm" id="bName">Save name</button></div>
+          <p class="hint">2 to 14 characters, and no one else can already have it. Changing it updates your existing leaderboard times too.</p>
+          <p id="nameMsg" class="msg"></p>
+        </div>
+        <div class="card">
+          <label>Your account key</label>
+          <div class="row"><input id="keyOut" readonly><button class="btn dark sm" id="bReveal">Show</button><button class="btn dark sm" id="bCopyKey">Copy</button><button class="btn dark sm" id="bBackup">Copy backup code</button></div>
+          <p class="hint" id="keyHint"></p>
+          <p id="acctMsg" class="msg"></p>
+        </div>
+        <div class="card">
+          <label>Your stats</label>
+          <div id="stats" class="stats"></div>
+        </div>
+        <div class="card">
+          <label>Log out</label>
+          <p class="hint">You'll go back to playing as a guest called <b>Driver</b>. Copy your key first, you need it to sign back in.</p>
+          <div class="row big"><button class="btn primary sm" id="bLogout">Log out</button></div>
+        </div>
       </div>
       <div class="card">
         <label>Online leaderboards</label>
@@ -132,16 +158,16 @@
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/config.js?v=20261009181542"></script>
-<script src="js/track.js?v=20261009181542"></script>
-<script src="js/car.js?v=20261009181542"></script>
-<script src="js/cars.js?v=20261009181542"></script>
-<script src="js/net.js?v=20261009181542"></script>
-<script src="js/session.js?v=20261009181542"></script>
-<script src="js/audio.js?v=20261009181542"></script>
-<script src="js/main.js?v=20261009181542"></script>
-<script src="js/account.js?v=20261009181542"></script>
-<script src="js/render.js?v=20261009181542"></script>
-<script src="js/ui.js?v=20261009181542"></script>
+<script src="js/config.js?v=20261010092918"></script>
+<script src="js/track.js?v=20261010092918"></script>
+<script src="js/car.js?v=20261010092918"></script>
+<script src="js/cars.js?v=20261010092918"></script>
+<script src="js/net.js?v=20261010092918"></script>
+<script src="js/session.js?v=20261010092918"></script>
+<script src="js/audio.js?v=20261010092918"></script>
+<script src="js/main.js?v=20261010092918"></script>
+<script src="js/account.js?v=20261010092918"></script>
+<script src="js/render.js?v=20261010092918"></script>
+<script src="js/ui.js?v=20261010092918"></script>
 </body>
 </html>

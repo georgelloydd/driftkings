@@ -8,6 +8,8 @@ function newKey() { const r = crypto.getRandomValues(new Uint8Array(12)); let s 
 function normKey(k) { return String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^MD/, '').replace(/(.{4})(?=.)/g, '$1-').replace(/^/, 'MD-'); }
 function validKey(k) { return /^MD-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(k); }
 async function sha(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+const GUEST_NAME = 'Driver';
+function cleanName(n) { return String(n || '').trim().replace(/\s+/g, ' ').slice(0, 14); }
 function blankStats() { return { races: 0, wins: 0, laps: 0, sessions: 0, drift: 0, dist: 0, best: {} }; }
 
 const ACCT = {
@@ -24,7 +26,7 @@ const ACCT = {
     if (CLOUD && fetchCloud !== false) { try { const r = await Promise.race([sb('GET', 'profiles?id=eq.' + this.priv + '&select=data'), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 4000))]); if (r && r[0]) data = r[0].data; } catch (e) { } }
     if (data) { this.stats = Object.assign(blankStats(), data.stats || {}); if (data.cfg) { Object.assign(CFG, data.cfg); } }
     else this.stats = blankStats();
-    this.reg = !!(data && data.reg); loadTweaks();
+    this.reg = !!(data && data.reg); if (!this.reg) CFG.name = GUEST_NAME; loadTweaks();
     this.save(true); if (CLOUD && this.reg) { this.save(); syncBests(false); this.register(); LB.flush(); }
     return !!data;
   },
@@ -43,10 +45,30 @@ const ACCT = {
     const found = await this.use(k, true);
     return found ? 'Signed in.' : CLOUD ? 'No saved account for that key, so a fresh profile was started with it.' : 'That key has no profile on this device. Use a backup code to move an account between devices.';
   },
-  async create() { await this.use(newKey(), false); this.stats = blankStats(); this.reg = true; this.save(); this.register(); },
+  // log out: forget this key on this device's active slot and go back to a fresh guest called Driver
+  async logout() {
+    this.save(true); clearTimeout(this._t); localStorage.removeItem('md_key');
+    await this.use(newKey(), false); this.stats = blankStats(); this.reg = false; CFG.name = GUEST_NAME; this.save(true);
+  },
+  // names are unique (case-insensitive) and 'Driver' is kept for guests. Throws with a friendly message if not allowed.
+  async checkName(name) {
+    name = cleanName(name);
+    if (name.length < 2) throw new Error('Pick a driver name (2 to 14 characters).');
+    if (/^driver\d*$/i.test(name)) throw new Error('"Driver" is the guest name. Pick something else.');
+    const low = name.toLowerCase();
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k.startsWith('md_acct_') || k === 'md_acct_' + this.key) continue;
+      try { const d = JSON.parse(localStorage.getItem(k) || 'null'); if (d && d.reg && d.cfg && String(d.cfg.name || '').toLowerCase() === low) throw new Error('Someone already has that name. Try another one.'); } catch (e) { if (/already/.test(e.message)) throw e; } }
+    if (!CLOUD) return name;
+    let free = null;
+    try { free = await sb('POST', 'rpc/name_available', { p_name: name, p_key: this.key }, 'return=representation'); }
+    catch (e) { // older database without name_available: check the public leaderboard names instead
+      try { const r = await sb('GET', 'laps?select=pid&limit=1&pid=neq.' + this.pub + '&name=ilike.' + encodeURIComponent(name.replace(/[%_*\\]/g, '\\$&'))); free = !(r && r.length); } catch (e2) { throw new Error('Could not check if that name is free. Check your connection and try again.'); } }
+    if (free === false) throw new Error('Someone already has that name. Try another one.');
+    return name;
+  },
   // turn the current guest profile into an account: from now on it syncs to Supabase and shows on the online leaderboards
   async signUp(name) {
-    name = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 14); if (name.length < 2) throw new Error('Pick a driver name (2 to 14 characters).');
+    name = await this.checkName(name);
     CFG.name = name; this.reg = true; this.save(); this.register();
     if (CLOUD) { await syncBests(true); LB.flush(); return 'Account created! Your best laps are now on the online leaderboards. Copy your key below so you can sign in on other devices.'; }
     return 'Account created! Copy your key below to keep it safe.';

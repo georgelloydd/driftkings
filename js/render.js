@@ -30,11 +30,11 @@ function render(dt) {
   if (CFG.gfx.fps) { G.fps = (G.fps || 60) * 0.94 + (1 / Math.max(dt, 1e-3)) * 0.06; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.font = '700 12px monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(Math.round(G.fps) + ' FPS', 14, VH - 14); }
 }
 function drawGates(tr) {
-  const me = G.me, live = me && me.lap >= 0, nx = me ? (me.seg || 0) + 1 : -1, t = performance.now() / 1000, hw = tr.w / 2;
+  const me = G.me, live = me && me.lap >= 0, nx = me ? nextGate(me) + 1 : -1, t = performance.now() / 1000, hw = tr.w / 2;
   ctx.save(); ctx.lineCap = 'round'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px Segoe UI, system-ui, sans-serif';
   for (const g of tr.gates) {
-    const p = tr.pts[g.i], a = tr.dirs[g.i], px = -Math.sin(a), py = Math.cos(a), next = live && g.s === nx, done = live && g.s <= me.seg;
-    const col = next ? '#ffd400' : done ? '#3ddc84' : '#ff2a2a', al = next ? 0.8 + 0.2 * Math.sin(t * 7) : done ? 0.5 : 0.8;
+    const p = tr.pts[g.i], a = tr.dirs[g.i], px = -Math.sin(a), py = Math.cos(a), next = live && g.s === nx, done = live && !!(me.gp && me.gp[g.s - 1]);
+    const col = next ? '#ffd400' : done ? '#6b6b73' : '#ff2a2a', al = next ? 0.8 + 0.2 * Math.sin(t * 7) : done ? 0.35 : 0.8;
     ctx.globalAlpha = al * 0.6; ctx.strokeStyle = col; ctx.lineWidth = 7; ctx.setLineDash([22, 16]);
     ctx.beginPath(); ctx.moveTo(p[0] - px * hw, p[1] - py * hw); ctx.lineTo(p[0] + px * hw, p[1] + py * hw); ctx.stroke(); ctx.setLineDash([]);
     ctx.globalAlpha = al;
@@ -64,7 +64,7 @@ function buildMini() { const c = document.createElement('canvas'); c.width = 220
 function drawMini() {
   const m = $('mini').getContext('2d'); m.clearRect(0, 0, 220, 160); m.drawImage(MINI.c, 0, 0);
   const p0 = G.tr.pts[0]; m.fillStyle = '#fff'; m.fillRect(10 + p0[0] * MINI.s - 3, 10 + p0[1] * MINI.s - 3, 6, 6);
-  if (CFG.gfx.gates && G.tr.gates) { const nx = G.me.seg + 1; for (const g of G.tr.gates) { const p = G.tr.pts[g.i]; m.fillStyle = g.s === nx && G.me.lap >= 0 ? '#ffd400' : 'rgba(255,42,42,.9)'; m.beginPath(); m.arc(10 + p[0] * MINI.s, 10 + p[1] * MINI.s, 3.2, 0, 7); m.fill(); } }
+  if (CFG.gfx.gates && G.tr.gates) { const nx = nextGate(G.me) + 1, gp = G.me.gp || []; for (const g of G.tr.gates) { const p = G.tr.pts[g.i]; m.fillStyle = G.me.lap >= 0 && gp[g.s - 1] ? 'rgba(120,120,128,.55)' : g.s === nx && G.me.lap >= 0 ? '#ffd400' : 'rgba(255,42,42,.9)'; m.beginPath(); m.arc(10 + p[0] * MINI.s, 10 + p[1] * MINI.s, 3.2, 0, 7); m.fill(); } }
   for (const c of [...[...G.rem.values()].map(r => r.car), G.me]) { m.fillStyle = c.color; m.strokeStyle = c === G.me ? '#fff' : '#000'; m.lineWidth = 2; m.beginPath(); m.arc(10 + c.x * MINI.s, 10 + c.y * MINI.s, c === G.me ? 6 : 5, 0, 7); m.fill(); m.stroke(); }
 }
 function renderAttract(dt) {

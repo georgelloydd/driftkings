@@ -4,6 +4,13 @@ Top-down drift racer in plain HTML/JS. Runs on GitHub Pages with no build step.
 
 Play: https://georgelloydd.github.io/minidrifters/
 
+## Accounts
+- Guests play as **Driver**. Create an account to pick a name; names are unique (not case-sensitive).
+- Logged in: change name, show/copy key, copy backup code, stats, log out.
+
+## SEO
+- `sitemap.xml` and `robots.txt` are included. In Google Search Console add the URL-prefix property `https://georgelloydd.github.io/minidrifters/` and submit `sitemap.xml`.
+
 ## Modes
 - **Time trial (endless)**: laps go on until you quit. **R** restarts the lap from the start line, **F** puts you back at the last checkpoint, **ESC** ends the session and shows a summary.
 - **Race / Drift battle**: solo, or with friends using a 5-letter room code (peer-to-peer with PeerJS, best on the same Wi-Fi). No player limit, random grid, chequered flag when the winner finishes, finished cars turn into ghosts.
@@ -156,6 +163,41 @@ grant execute on function public.admin_rename(text, text, text) to anon;
 grant execute on function public.admin_delete_lap(text, bigint) to anon;
 grant execute on function public.admin_clear_track(text, int) to anon;
 grant execute on function public.admin_purge_all(text) to anon;
+
+
+-- ===== unique driver names (case-insensitive). 'Driver' is kept for guests =====
+create or replace function public.name_available(p_name text, p_key text) returns boolean
+language sql stable security definer set search_path = public, extensions as $$
+  select length(btrim(coalesce(p_name, ''))) between 2 and 14
+    and lower(btrim(p_name)) !~ '^driver[0-9]*$'
+    and not exists (select 1 from player_keys k where lower(btrim(k.name)) = lower(btrim(p_name))
+      and k.pid <> left(encode(extensions.digest('pub:' || coalesce(p_key, ''), 'sha256'), 'hex'), 24))
+    and not exists (select 1 from laps l where lower(btrim(l.name)) = lower(btrim(p_name))
+      and l.pid <> left(encode(extensions.digest('pub:' || coalesce(p_key, ''), 'sha256'), 'hex'), 24));
+$$;
+
+create or replace function public.rename_player(p_key text, p_name text) returns void
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if not public.name_available(p_name, p_key) then raise exception 'That name is already taken' using errcode = '23505'; end if;
+  update public.laps set name = left(btrim(p_name), 14)
+  where pid = left(encode(extensions.digest('pub:' || p_key, 'sha256'), 'hex'), 24);
+  update public.player_keys set name = left(btrim(p_name), 14), updated_at = now()
+  where pid = left(encode(extensions.digest('pub:' || p_key, 'sha256'), 'hex'), 24);
+end $$;
+
+create or replace function public.register_key(p_key text, p_name text) returns void
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if p_key !~ '^MD-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$' then return; end if;
+  if not public.name_available(p_name, p_key) then raise exception 'That name is already taken' using errcode = '23505'; end if;
+  insert into player_keys (pid, key, name) values (substr(encode(digest('pub:' || p_key, 'sha256'), 'hex'), 1, 24), p_key, left(btrim(p_name), 14))
+  on conflict (pid) do update set name = excluded.name, updated_at = now();
+end $$;
+
+grant execute on function public.name_available(text, text) to anon;
+grant execute on function public.rename_player(text, text) to anon;
+grant execute on function public.register_key(text, text) to anon;
 
 notify pgrst, 'reload schema';
 ```

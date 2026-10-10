@@ -39,7 +39,8 @@ async function loadLB() {
   $('lbTable').innerHTML = '<tr><th>POS</th><th>DRIVER</th><th>CAR</th><th>BEST LAP</th><th>GAP</th><th>SET</th><th></th></tr>' + (res.rows.length ? res.rows.map((x, i) => `<tr class="${x.pid === ACCT.pub ? 'me' : ''}"><td class="pos">${i + 1}</td><td><i style="background:${esc(x.color || '#888')}"></i>${esc(x.name)}${x.pending ? ' <small style="color:#ff9a2a">· uploading</small>' : ''}${x.failed ? ` <small style="color:#ff5a5a" title="${esc(x.failed)}">· not uploaded (hover for why)</small>` : ''}</td><td>${esc(carType(x.body).name)}</td><td>${fmt(x.lap)}</td><td>${i ? '+' + ((x.lap - best) / 1000).toFixed(3) : '—'}</td><td>${x.at ? new Date(x.at).toLocaleDateString() : ''}</td><td><button class="btn dark sm" data-ghost="${i}" title="Race this lap's ghost in Time trial">Ghost</button></td></tr>`).join('') : '<tr><td colspan="7" style="color:#8b8b93;padding:22px">No laps yet. Set one in Time trial.</td></tr>'); LBROWS = res.rows; $('lbTable').querySelectorAll('[data-ghost]').forEach(b => b.onclick = () => raceGhost(LBT, LBROWS[+b.dataset.ghost], b));
 }
 function refreshAcct() {
-  if (!ACCT.key) return; $('regBox').classList.toggle('hidden', ACCT.reg); if (!ACCT.reg && document.activeElement !== $('regName') && !$('regName').value) $('regName').value = /^Driver\d*$/.test(CFG.name) ? '' : CFG.name; if (document.activeElement !== $('acctName')) $('acctName').value = CFG.name; $('keyOut').value = KEYSHOWN ? ACCT.key : ACCT.key.slice(0, 3) + '••••-••••-••••'; $('bReveal').textContent = KEYSHOWN ? 'Hide' : 'Show';
+  if (!ACCT.key) return; $('acctOut').classList.toggle('hidden', ACCT.reg); $('acctIn').classList.toggle('hidden', !ACCT.reg);
+  if (document.activeElement !== $('acctName')) $('acctName').value = CFG.name; $('keyOut').value = KEYSHOWN ? ACCT.key : ACCT.key.slice(0, 3) + '••••-••••-••••'; $('bReveal').textContent = KEYSHOWN ? 'Hide' : 'Show';
   $('keyHint').innerHTML = CLOUD ? 'This key is your login. Enter it on any device to get your profile back. Keep it secret.' : 'This key is your login on this device. To move to another device, copy your <b>backup code</b> and paste it there. Keep both secret.';
   $('onStatus').innerHTML = CLOUD ? (ONLINE_ERR ? '<b style="color:#ff6b6b">Error</b> · ' + esc(ONLINE_ERR) : 'Connected to ' + esc(ONLINE.SUPABASE_URL.replace(/^https?:\/\//, ''))) : 'Off · saving on this device only (no Supabase details in js/config.js).';
   const s = ACCT.stats, tb = TRACKS.map((t, i) => s.best[i] && s.best[i].lap ? `<div><small>${esc(t.name)}</small><b>${fmt(s.best[i].lap)}</b></div>` : '').join('');
@@ -74,13 +75,14 @@ function buildMenu() {
     const b = document.createElement('button'); b.className = 'opt'; b.dataset.lbt = i; b.textContent = t.name; b.onclick = () => { LBT = i; loadLB(); }; $('lbTracks').appendChild(b); });
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { CFG.mode = b.dataset.mode; saveCfg(); refreshMenu(); });
   document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { CFG.laps = +b.dataset.l; saveCfg(); refreshMenu(); });
-  $('nameIn').oninput = () => { CFG.name = $('nameIn').value.trim().slice(0, 14) || 'Driver'; saveCfg(); $('chip').querySelector('b').textContent = CFG.name; };
+  $('nameIn').onclick = () => { setTab('acct'); if (ACCT.reg) $('acctName').focus(); else $('regName').focus(); };
   $('bTest').onclick = async () => { $('onStatus').textContent = 'Testing…'; const r = await testOnline(); $('onStatus').innerHTML = `<b style="color:${r.ok ? '#7dff9a' : '#ff6b6b'}">${r.ok ? 'Working' : 'Not working'}</b> · ${esc(r.msg)}`; };
   $('bName').onclick = async () => {
     const v = $('acctName').value.trim().replace(/\s+/g, ' ');
-    if (v.length < 2) return msg('nameMsg', 'Name needs at least 2 characters.');
     if (v === CFG.name) return msg('nameMsg', 'That is already your name.');
-    CFG.name = v; saveCfg(); refreshMenu(); msg('nameMsg', 'Saving…');
+    msg('nameMsg', 'Checking name…'); $('bName').disabled = true;
+    try { await ACCT.checkName(v); } catch (e) { $('bName').disabled = false; return msg('nameMsg', e.message); }
+    $('bName').disabled = false; CFG.name = v; saveCfg(); refreshMenu(); msg('nameMsg', 'Saving…');
     if (NET.on) { if (NET.host) { NET.players.get('host').name = v; netLobby(); } else netSend({ t: 'info', name: v }); }
     const r = await ACCT.rename(v); msg('nameMsg', r);
   };
@@ -89,12 +91,13 @@ function buildMenu() {
   serversWatch(renderServers);
   $('bReveal').onclick = () => { KEYSHOWN = !KEYSHOWN; refreshAcct(); };
   const copy = (t, ok) => { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => msg('acctMsg', ok), () => { prompt('Copy this:', t); }); };
-  $('bReg').onclick = async () => { try { const m = await ACCT.signUp($('regName').value); KEYSHOWN = true; saveCfg(); refreshMenu(); msg('acctMsg', m); } catch (e) { msg('regMsg', e.message); } };
+  $('bReg').onclick = async () => { msg('regMsg', 'Checking name…'); $('bReg').disabled = true; try { const m = await ACCT.signUp($('regName').value); $('regName').value = ''; msg('regMsg'); KEYSHOWN = true; saveCfg(); refreshMenu(); msg('acctMsg', m); } catch (e) { msg('regMsg', e.message); } finally { $('bReg').disabled = false; } };
   $('regName').onkeydown = e => { if (e.key === 'Enter') $('bReg').click(); e.stopPropagation(); };
   $('bCopyKey').onclick = () => copy(ACCT.key, 'Key copied. Keep it somewhere safe.');
   $('bBackup').onclick = () => copy(ACCT.backup(), 'Backup code copied. Paste it into Sign in on another device.');
-  $('bSignIn').onclick = async () => { try { const m = await ACCT.restore($('keyIn').value); $('keyIn').value = ''; saveCfg(); refreshMenu(); msg('acctMsg', m); } catch (e) { msg('acctMsg', e.message); } };
-  $('bNew').onclick = async () => { if (!confirm('Start a new account? Copy your current key or backup code first if you want to come back to it.')) return; await ACCT.create(); KEYSHOWN = true; refreshMenu(); msg('acctMsg', 'New account created. Copy your key now.'); };
+  $('bSignIn').onclick = async () => { try { const m = await ACCT.restore($('keyIn').value); $('keyIn').value = ''; saveCfg(); refreshMenu(); msg(ACCT.reg ? 'acctMsg' : 'signMsg', m); if (ACCT.reg) msg('signMsg'); } catch (e) { msg('signMsg', e.message); } };
+  $('keyIn').onkeydown = e => { if (e.key === 'Enter') $('bSignIn').click(); e.stopPropagation(); };
+  $('bLogout').onclick = async () => { if (!confirm('Log out? Make sure you have copied your key, you need it to sign back in.')) return; if (typeof NET !== 'undefined' && NET.on && typeof netLeave === 'function') netLeave(); await ACCT.logout(); KEYSHOWN = false; saveCfg(); refreshMenu(); msg('acctMsg'); msg('nameMsg'); msg('signMsg', 'Logged out. You are now playing as Driver.'); };
   $('bSolo').onclick = () => { msg('joinMsg'); G.plist = []; startSession({ track: CFG.track, laps: 0, mode: 'tt' }, null, false); };
   $('bHost').onclick = () => {
     if (!ACCT.reg) { setTab('acct'); return msg('regMsg', 'Create an account first to host or join races.'); }
@@ -254,4 +257,32 @@ async function raceGhost(tr, row, btn) {
   const go = () => { scan(document.body); new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) scan(n); }).observe(document.body, { childList: true, subtree: true }); };
   if (document.body) go(); else document.addEventListener('DOMContentLoaded', go);
   window.cselRefresh = () => document.querySelectorAll('select').forEach(s => s._csUpd && s._csUpd());
+})();
+
+// ===== TOUCH CONTROLS (phones / tablets) =====
+const TOUCH = { up: 0, down: 0, left: 0, right: 0, hb: 0 };
+(function () {
+  const body = document.body, d = document.createElement('div'); d.id = 'touch'; d.className = 'hidden';
+  d.innerHTML = '<div class="tGroup tl"><button data-t="left" aria-label="Steer left">&#9664;</button><button data-t="right" aria-label="Steer right">&#9654;</button></div>'
+    + '<div class="tGroup tr"><button data-t="hb" class="hb">HAND<br>BRAKE</button><button data-t="down" class="brk">BRAKE</button><button data-t="up" class="gas">GAS</button></div>'
+    + '<div class="tTop"><button data-a="reset" aria-label="Restart">&#8634;</button><button data-a="cp" aria-label="Checkpoint">&#9873;</button><button data-a="esc" aria-label="Menu">II</button></div>';
+  body.appendChild(d);
+  d.querySelectorAll('[data-t]').forEach(b => {
+    const k = b.dataset.t, off = () => { TOUCH[k] = 0; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); try { sndInit(); } catch (_) {} try { b.setPointerCapture(e.pointerId); } catch (_) {} TOUCH[k] = 1; b.classList.add('on'); if (navigator.vibrate) navigator.vibrate(8); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, off));
+  });
+  d.querySelectorAll('[data-a]').forEach(b => b.addEventListener('pointerdown', e => {
+    e.preventDefault(); const a = b.dataset.a; if (a === 'esc') return handleEsc(); if (G.state !== 'race' || !G.me) return;
+    if (a === 'reset') { if (G.tt) ttRestart(); else resetCar(G.me); } else { if (G.tt) ttCheckpoint(); else resetCar(G.me); }
+  }));
+  d.addEventListener('contextmenu', e => e.preventDefault());
+  const mark = () => body.classList.add('touch');
+  if (matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0) mark();
+  addEventListener('touchstart', mark, { passive: true });
+  addEventListener('keydown', () => { if (!matchMedia('(pointer: coarse)').matches) body.classList.remove('touch'); });
+  let lastShow = null;
+  (function loop() { const show = body.classList.contains('touch') && (G.state === 'race' || G.state === 'countdown');
+    if (show !== lastShow) { d.classList.toggle('hidden', !show); if (!show) for (const k in TOUCH) TOUCH[k] = 0; d.querySelectorAll('.on').forEach(x => x.classList.remove('on')); lastShow = show; }
+    d.querySelector('[data-a=cp]').style.display = G.tt ? '' : 'none'; requestAnimationFrame(loop); })();
 })();
