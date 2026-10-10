@@ -109,7 +109,7 @@ function tickInner(ts, bg) {
   if (G.state === 'countdown') { const left = G.cdEnd - now; banner(left > 0 ? (G.cfg.laps || G.tt ? String(Math.ceil(left / 1000)) : '') : ''); if (left <= 0) { G.state = 'race'; if (G.tt) G.tt.start = now; if (G.cfg.laps || G.tt) { banner('GO!'); setTimeout(() => { if ($('banner').textContent === 'GO!') banner(''); }, 900); } } }
   G.acc += dt; let inp = inputs();
   if (!racing) inp = { hb: true }; else if (me.finished) inp = { down: me.vF > 30 };
-  while (G.acc >= STEP) { G.acc -= STEP; const ox = me.x, oy = me.y, nr = stepCar(me, inp, STEP, G.tr); if (racing && !me.finished) { const tn = performance.now(); gateCross(me, ox, oy, tn); progress(me, nr.i, tn); } }
+  while (G.acc >= STEP) { G.acc -= STEP; me.px = me.x; me.py = me.y; me.pa = me.a; const ox = me.x, oy = me.y, nr = stepCar(me, inp, STEP, G.tr); if (racing && !me.finished) { const tn = performance.now(); gateCross(me, ox, oy, tn); progress(me, nr.i, tn); } }
   if (racing && !me.finished && me.lap >= 0) { if (G.recStart !== me.lapStart) { G.recStart = me.lapStart; G.recL = []; G.recK = -1; } const k = Math.floor((performance.now() - me.lapStart) / 100); if (k > G.recK) { G.recK = k; G.recL.push([Math.round(me.x), Math.round(me.y), Math.round(me.a * 100)]); } }
   // drift scoring
   if (racing && !me.finished) {
@@ -134,10 +134,10 @@ function tickInner(ts, bg) {
   document.addEventListener('visibilitychange', () => { for (const k in KEYS) KEYS[k] = false; if (!document.hidden) G.last = 0; });
 })();
 function effects(dt) {
-  const tg = G.tr.canvas.getContext('2d'), snow = G.tr.th.snow;
+  const snow = G.tr.th.snow;
   for (const c of [G.me, ...[...G.rem.values()].map(r => r.car)]) {
     const sliding = (c.drift || c.hb || (c.brake && c.speed > 500)) && c.speed > 120;
-    if (sliding) { const w = wheelPos(c); if (c.rwL && CFG.gfx.skids) { tg.strokeStyle = snow ? 'rgba(110,120,135,.35)' : 'rgba(15,15,18,.32)'; tg.lineWidth = 7; tg.lineCap = 'round'; tg.beginPath(); tg.moveTo(c.rwL[0], c.rwL[1]); tg.lineTo(w[0][0], w[0][1]); tg.moveTo(c.rwR[0], c.rwR[1]); tg.lineTo(w[1][0], w[1][1]); tg.stroke(); } c.rwL = w[0]; c.rwR = w[1];
+    if (sliding) { const w = wheelPos(c); if (c.rwL && CFG.gfx.skids) { skidSeg(c.rwL, w[0], snow); skidSeg(c.rwR, w[1], snow); } c.rwL = w[0]; c.rwR = w[1];
       if (CFG.gfx.smoke && G.smoke.length < 450) for (const p of w) if (Math.random() < 0.8) G.smoke.push({ x: p[0], y: p[1], vx: (Math.random() - 0.5) * 40 - c.vx * 0.05, vy: (Math.random() - 0.5) * 40 - c.vy * 0.05, r: 8, life: 0, max: 0.9 + Math.random() * 0.8 }); }
     else c.rwL = c.rwR = null;
   }
@@ -186,7 +186,14 @@ function setGhost(rep, pick) {
 function ghostCars() {
   const gc = G.ghostCar, L = G.ghost, me = G.me; if (!gc || !L || G.state !== 'race' || !me || me.lap < 0 || me.finished) return [];
   const k = (performance.now() - me.lapStart) / 100, i = Math.floor(k); if (i < 0 || i >= L.length - 1) return [];
-  const f = k - i, A = L[i], B = L[i + 1]; gc.x = A[0] + (B[0] - A[0]) * f; gc.y = A[1] + (B[1] - A[1]) * f; gc.a = A[2] + (B[2] - A[2]) * f; gc.vx = (B[0] - A[0]) * 10; gc.vy = (B[1] - A[1]) * 10; gc.speed = Math.hypot(gc.vx, gc.vy); return [gc];
+  const f = k - i, P = L[Math.max(0, i - 1)], A = L[i], B = L[i + 1], Q = L[Math.min(L.length - 1, i + 2)], f2 = f * f, f3 = f2 * f;
+  const cr = (p0, p1, p2, p3) => 0.5 * (2 * p1 + (p2 - p0) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f2 + (3 * p1 - p0 - 3 * p2 + p3) * f3);
+  const cd = (p0, p1, p2, p3) => 0.5 * ((p2 - p0) + 2 * (2 * p0 - 5 * p1 + 4 * p2 - p3) * f + 3 * (3 * p1 - p0 - 3 * p2 + p3) * f2);
+  const a1 = A[2], a0 = a1 + angDiff(P[2], a1), a2 = a1 + angDiff(B[2], a1), a3 = a2 + angDiff(Q[2], B[2]);
+  const far = Math.hypot(B[0] - A[0], B[1] - A[1]) > 300 || Math.hypot(P[0] - A[0], P[1] - A[1]) > 300 || Math.hypot(Q[0] - B[0], Q[1] - B[1]) > 300;
+  if (far) { gc.x = A[0] + (B[0] - A[0]) * f; gc.y = A[1] + (B[1] - A[1]) * f; gc.a = a1 + (a2 - a1) * f; gc.vx = (B[0] - A[0]) * 10; gc.vy = (B[1] - A[1]) * 10; }
+  else { gc.x = cr(P[0], A[0], B[0], Q[0]); gc.y = cr(P[1], A[1], B[1], Q[1]); gc.a = cr(a0, a1, a2, a3); gc.vx = cd(P[0], A[0], B[0], Q[0]) * 10; gc.vy = cd(P[1], A[1], B[1], Q[1]) * 10; }
+  gc.speed = Math.hypot(gc.vx, gc.vy); return [gc];
 }
 // ---------- checkpoint deltas against your best lap ----------
 function splitRef() { try { const r = JSON.parse(localStorage.getItem('md_split_' + G.cfg.track) || 'null'); return r && r.n === G.tr.n && r.k === G.tr.gates.length && Array.isArray(r.s) ? r : null; } catch (e) { return null; } }
@@ -218,7 +225,7 @@ function bufState(r, s, now) {
 }
 function interpRemote(r, c, now) {
   const B = r.buf; if (!B || !B.length) return;
-  const delay = Math.max(70, Math.min(260, NET.rate * 1.3 + (r.jit || 0) + 10)), rt = now - delay, L = B[B.length - 1];
+  const delay = Math.max(95, Math.min(260, NET.rate * 1.6 + (r.jit || 0) + 10)), rt = now - delay, L = B[B.length - 1];
   let x, y, a, vx, vy;
   if (rt >= L.t) { const e = Math.min(0.2, (rt - L.t) / 1000); x = L.x + L.vx * e; y = L.y + L.vy * e; a = L.a; vx = L.vx; vy = L.vy; }
   else if (rt <= B[0].t) ({ x, y, a, vx, vy } = B[0]);
@@ -226,7 +233,7 @@ function interpRemote(r, c, now) {
     let i = B.length - 1; while (i > 0 && B[i - 1].t > rt) i--;
     const p = B[i - 1], q = B[i], f = (rt - p.t) / Math.max(1, q.t - p.t);
     if (Math.hypot(q.x - p.x, q.y - p.y) > 400) ({ x, y, a, vx, vy } = f < 0.5 ? p : q);
-    else { x = p.x + (q.x - p.x) * f; y = p.y + (q.y - p.y) * f; a = p.a + angDiff(q.a, p.a) * f; vx = p.vx + (q.vx - p.vx) * f; vy = p.vy + (q.vy - p.vy) * f; }
+    else { const s = Math.max(1, q.t - p.t) / 1000, f2 = f * f, f3 = f2 * f, h00 = 2 * f3 - 3 * f2 + 1, h10 = f3 - 2 * f2 + f, h01 = 3 * f2 - 2 * f3, h11 = f3 - f2; x = h00 * p.x + h10 * s * p.vx + h01 * q.x + h11 * s * q.vx; y = h00 * p.y + h10 * s * p.vy + h01 * q.y + h11 * s * q.vy; a = p.a + angDiff(q.a, p.a) * f; vx = p.vx + (q.vx - p.vx) * f; vy = p.vy + (q.vy - p.vy) * f; }
   }
   while (B.length > 2 && B[1].t < rt - 500) B.shift();
   c.x = x; c.y = y; c.a = a; c.vx = vx; c.vy = vy; c.speed = Math.hypot(vx, vy); c.slip = Math.abs(angDiff(Math.atan2(vy, vx), a));

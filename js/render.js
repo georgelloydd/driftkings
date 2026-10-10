@@ -5,26 +5,31 @@ function drawWorld(tr, cam, cars, rot) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = shadeHex(th.grass, 0.55); ctx.fillRect(0, 0, VW, VH);
   ctx.save(); ctx.translate(VW / 2, VH / 2); if (rot) ctx.rotate(cam.a); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y);
   const hd = Math.hypot(VW, VH) / 2 / cam.z + 20, sx = Math.max(0, cam.x - hd), sy = Math.max(0, cam.y - hd), sw = Math.min(tr.W || WORLD_W, cam.x + hd) - sx, sh = Math.min(tr.H || WORLD_H, cam.y + hd) - sy, bs = tr.bs || 1;
-  if (sw > 0 && sh > 0) { ctx.drawImage(tr.canvas, sx * bs, sy * bs, sw * bs, sh * bs, sx, sy, sw, sh); if (bs < 0.99) drawRoadLive(ctx, tr, sx, sy, sx + sw, sy + sh); if (night) { ctx.fillStyle = 'rgba(4,6,22,.55)'; ctx.fillRect(sx, sy, sw, sh); } }
+  if (sw > 0 && sh > 0) { ctx.drawImage(tr.canvas, sx * bs, sy * bs, sw * bs, sh * bs, sx, sy, sw, sh); if (bs < 0.99) drawRoadLive(ctx, tr, sx, sy, sx + sw, sy + sh); drawSkids(tr, sx, sy, sw, sh); if (night) { ctx.fillStyle = 'rgba(4,6,22,.55)'; ctx.fillRect(sx, sy, sw, sh); } }
   const inGame = G.state !== 'menu' && G.state !== 'lobby', tT = inGame ? (G.tunT || 0) : 0;
   drawWalls(ctx, tr);
   if (tT > 0.01 && sw > 0) { ctx.fillStyle = `rgba(2,3,12,${0.58 * tT})`; ctx.fillRect(sx, sy, sw, sh); }
   drawTunnelFloor(ctx, tr);
   if (CFG.gfx.gates && G.state !== 'menu' && G.state !== 'lobby') drawGates(tr);
   for (const p of G.smoke) { const a = (1 - p.life / p.max) * 0.32; ctx.fillStyle = night ? `rgba(170,180,230,${a})` : `rgba(238,238,242,${a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill(); }
-  const dc = c => { if (c.finished && (G.state === 'race' || G.state === 'countdown' || G.state === 'over')) { ctx.globalAlpha = 0.35; drawCar(ctx, c, night); ctx.globalAlpha = 1; } else drawCar(ctx, c, night); };
+  const dc = c => { if (c.finished && (G.state === 'race' || G.state === 'countdown' || G.state === 'over')) { drawFaded(c); } else drawCar(ctx, c, night); };
   const hi = []; for (const c of cars) { if (carLayer(tr, c) === 1) hi.push(c); else dc(c); }
   drawTunnelRoof(ctx, tr, 0.9 - 0.75 * tT); drawBridges(ctx, tr); hi.forEach(dc);
   ctx.restore();
   ctx.font = '700 13px Segoe UI, system-ui, sans-serif'; ctx.textAlign = 'center';
   for (const c of cars) { if (!c.name || c === G.me) continue; const [x, y] = worldToScreen(cam, c.x, c.y); const w = ctx.measureText(c.name).width + 14; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.beginPath(); ctx.roundRect(x - w / 2, y - 52, w, 20, 8); ctx.fill(); ctx.fillStyle = c.color; ctx.fillRect(x - w / 2 + 4, y - 35, w - 8, 2); ctx.fillStyle = '#fff'; ctx.fillText(c.name, x, y - 37); }
   if (th.snow && CFG.gfx.weather) { if (!G.snow.length) for (let i = 0; i < 140; i++) G.snow.push([Math.random() * 2000, Math.random() * 1200, 1 + Math.random() * 2.5]); ctx.fillStyle = 'rgba(255,255,255,.85)'; for (const f of G.snow) { f[1] += f[2] * 0.9; f[0] += Math.sin(f[1] * 0.01) * 0.6; if (f[1] > VH) { f[1] = -5; f[0] = Math.random() * VW; } ctx.beginPath(); ctx.arc(f[0] % VW, f[1], f[2], 0, 7); ctx.fill(); } }
-  if (CFG.gfx.vignette) { const vg = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.hypot(VW, VH) * 0.6); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.4)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, VW, VH); }
+  if (CFG.gfx.vignette) { let vg = G.vg; if (!vg || G.vgK !== VW + 'x' + VH) { vg = G.vg = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.hypot(VW, VH) * 0.6); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.4)'); G.vgK = VW + 'x' + VH; } ctx.fillStyle = vg; ctx.fillRect(0, 0, VW, VH); }
 }
 function render(dt) {
-  const me = G.me, cam = G.cam, base = Math.min(VW, VH) / 820, zt = base * (1.08 - Math.min(1, me.speed / CAR.MAXS) * 0.32) * (1 + 0.4 * (G.tunT = (G.tunT || 0) + ((me.layer === -1 ? 1 : 0) - (G.tunT || 0)) * Math.min(1, dt * 3))), k = Math.min(1, dt * 6);
-  cam.z += (zt - cam.z) * Math.min(1, dt * 2); cam.x += (me.x + me.vx * 0.3 - cam.x) * k; cam.y += (me.y + me.vy * 0.3 - cam.y) * k;
-  if (G.rot) cam.a += angDiff(-me.a - Math.PI / 2, cam.a) * Math.min(1, dt * 4);
+  const me = G.me, rx = me.x, ry = me.y, ra = me.a, al = Math.max(0, Math.min(1, G.acc / STEP));
+  if (me.px != null && Math.hypot(me.x - me.px, me.y - me.py) < 120) { me.x = me.px + (rx - me.px) * al; me.y = me.py + (ry - me.py) * al; me.a = me.pa + angDiff(ra, me.pa) * al; }
+  try { renderInner(dt, me); } finally { me.x = rx; me.y = ry; me.a = ra; }
+}
+function renderInner(dt, me) {
+  const cam = G.cam, base = Math.min(VW, VH) / 820, zt = base * (1.08 - Math.min(1, me.speed / CAR.MAXS) * 0.32) * (1 + 0.4 * (G.tunT = (G.tunT || 0) + ((me.layer === -1 ? 1 : 0) - (G.tunT || 0)) * Math.min(1, dt * 3))), k = 1 - Math.exp(-dt * 6);
+  cam.z += (zt - cam.z) * (1 - Math.exp(-dt * 2)); cam.x += (me.x + me.vx * 0.3 - cam.x) * k; cam.y += (me.y + me.vy * 0.3 - cam.y) * k;
+  if (G.rot) cam.a += angDiff(-me.a - Math.PI / 2, cam.a) * (1 - Math.exp(-dt * 4));
   drawWorld(G.tr, cam, [...ghostCars(), ...[...G.rem.values()].map(r => r.car), me], G.rot);
   drawMini();
   if (CFG.gfx.fps) { G.fps = (G.fps || 60) * 0.94 + (1 / Math.max(dt, 1e-3)) * 0.06; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.font = '700 12px monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(Math.round(G.fps) + ' FPS', 14, VH - 14); }
@@ -49,14 +54,15 @@ function drawGates(tr) {
 }
 function posOf(c) { const n = G.tr.n; if (G.cfg.mode === 'drift') return c.score + c.cur; return c.finished ? 1e9 - c.finished : (c.lap < 0 ? c.prog - n : c.lap * n + c.prog); }
 function hud(now) {
+  const T = (e, v) => { v = String(v); if (e._t !== v) { e._t = v; e.textContent = v; } };
   const me = G.me, d = $('driftBox');
-  if (me.cur > 0) { d.classList.remove('hidden'); $('dPts').textContent = Math.round(me.cur).toLocaleString(); $('dCombo').textContent = 'x' + me.combo + (me.off ? ' ⚠' : ''); } else d.classList.add('hidden');
+  if (me.cur > 0) { d.classList.remove('hidden'); T($('dPts'), Math.round(me.cur).toLocaleString()); T($('dCombo'), 'x' + me.combo + (me.off ? ' ⚠' : '')); } else d.classList.add('hidden');
   if (now - G.hudT < 90) return; G.hudT = now;
-  $('spd').textContent = Math.round(me.speed * 0.25);
-  const L = G.cfg.laps; $('hLap').querySelector('b').textContent = G.tt ? (G.tt.laps + 1) + ' / ∞' : Math.min(L, Math.max(1, me.lap + 1)) + '/' + L;
-  const t = G.tt ? (G.state === 'race' && me.lap >= 0 ? now - me.lapStart : 0) : me.finished || (G.state === 'race' ? now - G.t0 : 0); $('hTime').querySelector('b').textContent = fmt(t) === '--' ? '0:00.000' : fmt(t);
-  $('hBest').querySelector('b').textContent = fmt(me.best); $('hScore').querySelector('b').textContent = me.score.toLocaleString();
-  if (G.rem.size) { const all = [me, ...[...G.rem.values()].map(r => r.car)], m = posOf(me); $('hPos').querySelector('b').textContent = (1 + all.filter(c => c !== me && posOf(c) > m).length) + '/' + all.length; }
+  T($('spd'), Math.round(me.speed * 0.25));
+  const L = G.cfg.laps; T($('hLap').querySelector('b'), G.tt ? (G.tt.laps + 1) + ' / ∞' : Math.min(L, Math.max(1, me.lap + 1)) + '/' + L);
+  const t = G.tt ? (G.state === 'race' && me.lap >= 0 ? now - me.lapStart : 0) : me.finished || (G.state === 'race' ? now - G.t0 : 0); T($('hTime').querySelector('b'), fmt(t) === '--' ? '0:00.000' : fmt(t));
+  T($('hBest').querySelector('b'), fmt(me.best)); T($('hScore').querySelector('b'), me.score.toLocaleString());
+  if (G.rem.size) { const all = [me, ...[...G.rem.values()].map(r => r.car)], m = posOf(me); T($('hPos').querySelector('b'), (1 + all.filter(c => c !== me && posOf(c) > m).length) + '/' + all.length); }
   const b = $('banner'); if (me.wrong > 1) banner('⚠ WRONG WAY', true); else if (b.textContent === '⚠ WRONG WAY') banner('');
 }
 let MINI = null;
@@ -79,3 +85,27 @@ function toMenu() {
   for (const s of ['hud', 'speedo', 'mini', 'board', 'driftBox', 'lobby', 'hKeys']) $(s).classList.add('hidden'); $('menu').classList.remove('hidden'); banner(''); if (window.refreshMenu) refreshMenu(); sndUpdate({ speed: 0 }, false);
 }
 function hostToLobby() { NET.inRace = false; G.state = 'lobby'; netLobby(); }
+
+// ---------- skid marks live in small 512px tiles, so drifting never re-uploads the whole track image ----------
+const SKT = 512;
+function skidSeg(a, b, snow) {
+  const tr = G.tr; if (!tr || !a || !b) return; const S = tr.skid || (tr.skid = new Map()), ks = Math.min(1, tr.bs || 1);
+  const x0 = Math.floor((Math.min(a[0], b[0]) - 5) / SKT), x1 = Math.floor((Math.max(a[0], b[0]) + 5) / SKT), y0 = Math.floor((Math.min(a[1], b[1]) - 5) / SKT), y1 = Math.floor((Math.max(a[1], b[1]) + 5) / SKT);
+  for (let tx = x0; tx <= x1; tx++) for (let ty = y0; ty <= y1; ty++) {
+    const key = tx + ',' + ty; let t = S.get(key);
+    if (!t) { const c = document.createElement('canvas'); c.width = c.height = Math.ceil(SKT * ks); const g = c.getContext('2d'); g.scale(ks, ks); g.translate(-tx * SKT, -ty * SKT); g.lineCap = 'round'; g.lineWidth = 7; t = { c, g, tx, ty }; S.set(key, t); }
+    t.g.strokeStyle = snow ? 'rgba(110,120,135,.35)' : 'rgba(15,15,18,.32)'; t.g.beginPath(); t.g.moveTo(a[0], a[1]); t.g.lineTo(b[0], b[1]); t.g.stroke();
+  }
+}
+function drawSkids(tr, sx, sy, sw, sh) {
+  const S = tr.skid; if (!S || !S.size) return;
+  for (let tx = Math.floor(sx / SKT); tx <= Math.floor((sx + sw) / SKT); tx++) for (let ty = Math.floor(sy / SKT); ty <= Math.floor((sy + sh) / SKT); ty++) { const t = S.get(tx + ',' + ty); if (t) ctx.drawImage(t.c, tx * SKT, ty * SKT, SKT, SKT); }
+}
+// ---------- ghost / finished cars: drawn once into a sprite, then stamped with transparency ----------
+const FADED = new Map();
+function drawFaded(c) {
+  const key = [c.body, c.color, c.livery, c.num, c.name].join('|'); let s = FADED.get(key);
+  if (!s) { const K = 3, c2 = document.createElement('canvas'); c2.width = 200 * K; c2.height = 120 * K; const g = c2.getContext('2d'); g.scale(K, K); g.translate(100, 60);
+    drawCar(g, Object.assign({}, c, { x: 0, y: 0, a: 0, steer: 0, brake: false, hb: false, drift: false, thr: false }), false); s = c2; if (FADED.size > 30) FADED.clear(); FADED.set(key, s); }
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.a); ctx.globalAlpha = 0.38; ctx.drawImage(s, -100, -60, 200, 120); ctx.restore();
+}

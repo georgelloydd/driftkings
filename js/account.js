@@ -5,8 +5,14 @@
 const CLOUD = !!(ONLINE.SUPABASE_URL && ONLINE.SUPABASE_ANON_KEY);
 const KEY_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function newKey() { const r = crypto.getRandomValues(new Uint8Array(12)); let s = 'MD'; for (let i = 0; i < 12; i++) { if (i % 4 === 0) s += '-'; s += KEY_ABC[r[i] % 32]; } return s; }
-function normKey(k) { return String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^MD/, '').replace(/(.{4})(?=.)/g, '$1-').replace(/^/, 'MD-'); }
-function validKey(k) { return /^MD-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(k); }
+function normKey(k) {
+  const s = String(k || '').toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9-]/g, '');
+  // the normal MD-XXXX-XXXX-XXXX format (typed with or without dashes)
+  if (/^(MD-?)?([A-Z0-9]{4}-?){3}$/.test(s) && s.replace(/^MD-?/, '').replace(/-/g, '').length === 12) return 'MD-' + s.replace(/^MD-?/, '').replace(/-/g, '').replace(/(.{4})(?=.)/g, '$1-');
+  // custom keys made on the dev dashboard, e.g. MD-GEORGE
+  return 'MD-' + s.replace(/^MD-?/, '').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+}
+function validKey(k) { return /^MD-[A-Z0-9][A-Z0-9-]{1,30}[A-Z0-9]$/.test(k); }
 async function sha(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
 const GUEST_NAME = 'Driver';
 function cleanName(n) { return String(n || '').trim().replace(/\s+/g, ' ').slice(0, 14); }
@@ -41,7 +47,7 @@ const ACCT = {
   async restore(text) {
     text = String(text || '').trim();
     if (text.startsWith('MDB1.')) { const o = JSON.parse(decodeURIComponent(escape(atob(text.slice(5))))); localStorage.setItem('md_acct_' + o.k, JSON.stringify(o.d)); await this.use(o.k, false); return 'Account restored from backup code.'; }
-    const k = normKey(text); if (!validKey(k)) throw new Error('That does not look like a key (MD-XXXX-XXXX-XXXX) or a backup code.');
+    const k = normKey(text); if (!validKey(k)) throw new Error('That does not look like a key (MD-XXXX-XXXX-XXXX or a custom MD-... key) or a backup code.');
     const found = await this.use(k, true);
     return found ? 'Signed in.' : CLOUD ? 'No saved account for that key, so a fresh profile was started with it.' : 'That key has no profile on this device. Use a backup code to move an account between devices.';
   },
